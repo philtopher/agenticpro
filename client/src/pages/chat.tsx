@@ -32,7 +32,7 @@ export default function Chat() {
 
   const sendCommunicationMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("/api/communications", {
+      return await apiRequest("/api/communicate", {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },

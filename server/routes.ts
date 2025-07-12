@@ -65,7 +65,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdById: "system", // Default to system user when no auth
       });
       
+      // If no agent assigned, assign to Product Manager by default
+      if (!taskData.assignedToId) {
+        const productManager = await storage.getAgentByType('product_manager');
+        if (productManager) {
+          taskData.assignedToId = productManager.id;
+        }
+      }
+      
       const task = await taskService.createTask(taskData);
+      
+      // Broadcast task creation to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'task_created',
+            data: task
+          }));
+        }
+      });
+      
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -164,6 +183,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ message: "Failed to fetch metrics" });
+    }
+  });
+
+  // User to agent communication
+  app.post('/api/communicate', async (req, res) => {
+    try {
+      const { message, toAgentId, taskId } = req.body;
+      
+      const communicationData = {
+        fromAgentId: null, // User message
+        toAgentId: toAgentId ? parseInt(toAgentId) : null,
+        taskId: taskId || null,
+        message: message,
+        messageType: 'user_message',
+        metadata: {
+          timestamp: new Date().toISOString(),
+          userInitiated: true,
+        },
+      };
+      
+      const communication = await communicationService.createCommunication(communicationData);
+      
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'communication_created',
+            data: communication
+          }));
+        }
+      });
+      
+      res.status(201).json(communication);
+    } catch (error) {
+      console.error("Error creating communication:", error);
+      res.status(500).json({ message: "Failed to create communication" });
     }
   });
 

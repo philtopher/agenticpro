@@ -27,8 +27,11 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
 
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
-      const response = await apiRequest("POST", "/api/tasks", taskData);
-      return response.json();
+      return await apiRequest("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify(taskData),
+        headers: { "Content-Type": "application/json" },
+      });
     },
     onSuccess: () => {
       toast({
@@ -41,17 +44,6 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
       resetForm();
     },
     onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
       toast({
         title: "Error",
         description: "Failed to create task. Please try again.",

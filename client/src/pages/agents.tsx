@@ -1,14 +1,35 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { TopNavigation } from "@/components/TopNavigation";
+import { AgentDetailModal } from "@/components/AgentDetailModal";
+import { Bot, Activity, Clock, AlertCircle, CheckCircle, Zap, Eye } from "lucide-react";
 
 export default function Agents() {
+  const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const { data: agents, isLoading } = useQuery({
     queryKey: ["/api/agents"],
     retry: false,
   });
+
+  const { data: tasks = [] } = useQuery({
+    queryKey: ["/api/tasks"],
+    retry: false,
+  });
+
+  const { data: communications = [] } = useQuery({
+    queryKey: ["/api/communications"],
+    retry: false,
+  });
+
+  const handleViewDetails = (agent: any) => {
+    setSelectedAgent(agent);
+    setShowDetailModal(true);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -126,6 +147,17 @@ export default function Agents() {
                       </Badge>
                     ))}
                   </div>
+
+                  <div className="pt-4 border-t">
+                    <Button
+                      onClick={() => handleViewDetails(agent)}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -140,6 +172,15 @@ export default function Agents() {
           </div>
         )}
       </div>
+
+      {/* Agent Detail Modal */}
+      <AgentDetailModal
+        isOpen={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        agent={selectedAgent}
+        tasks={tasks}
+        communications={communications}
+      />
     </div>
   );
 }
