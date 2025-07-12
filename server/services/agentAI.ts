@@ -1,7 +1,7 @@
 import { Agent, Task, Communication, Artifact } from "@shared/schema";
 import { IStorage } from "../storage";
 import { EXTENDED_AGENT_PROMPTS, GLOBAL_PROMPTS } from "./agentPromptsExtended";
-import { azureOpenAIService } from "./azureOpenAI";
+import { openAIService } from "./openAI";
 
 export interface AgentPrompt {
   role: string;
@@ -806,9 +806,9 @@ Based on your role and the task context, provide a detailed response about how y
 Please provide a comprehensive response as this agent would.`;
     
     try {
-      // Use Azure OpenAI if available, otherwise fall back to simulation
-      if (azureOpenAIService.isConfigured()) {
-        const aiResponse = await azureOpenAIService.generateResponse(fullPrompt, 1500);
+      // Use OpenAI if available, otherwise fall back to simulation
+      if (openAIService.isConfigured()) {
+        const aiResponse = await openAIService.generateResponse(fullPrompt, 1500);
         return {
           response: aiResponse,
           nextAgent: this.getNextAgentType(agent.type),
@@ -833,6 +833,7 @@ Please provide a comprehensive response as this agent would.`;
     expectedArtifacts.forEach(artifact => {
       if (lowerResponse.includes(artifact.toLowerCase())) {
         artifacts.push({
+          name: artifact,
           type: artifact,
           content: `Generated ${artifact}`,
           description: `AI-generated ${artifact} based on task analysis`
@@ -841,6 +842,7 @@ Please provide a comprehensive response as this agent would.`;
     });
     
     return artifacts.length > 0 ? artifacts : [{
+      name: expectedArtifacts[0] || "Analysis",
       type: expectedArtifacts[0] || "Analysis",
       content: "Task analysis completed",
       description: "AI analysis of the given task"
@@ -909,6 +911,7 @@ Next Steps: Handing off to Business Analyst for user story creation.`,
       nextAgent: 'business_analyst',
       artifacts: [
         {
+          name: 'Requirements Analysis',
           type: 'requirements_document',
           title: 'Requirements Analysis',
           content: `Requirements for: ${task.title}\n\nDescription: ${task.description}\n\nAcceptance Criteria defined.`
@@ -940,6 +943,7 @@ Next Steps: Passing detailed requirements to Developer for implementation.`,
       nextAgent: 'developer',
       artifacts: [
         {
+          name: 'User Stories and Analysis',
           type: 'user_stories',
           title: 'User Stories and Analysis',
           content: `User stories and workflow analysis for: ${task.title}`
@@ -1035,6 +1039,7 @@ Task Status: COMPLETED`,
       nextAgent: undefined, // Task is complete
       artifacts: [
         {
+          name: 'Final Approval',
           type: 'approval_document',
           title: 'Final Approval',
           content: `Final approval for: ${task.title}\n\nAPPROVED - Task completed successfully.`
@@ -1062,6 +1067,7 @@ Next Steps: Task reassigned with clear instructions and priority.`,
       nextAgent: 'product_manager', // Restart the workflow
       artifacts: [
         {
+          name: 'Escalation Analysis',
           type: 'escalation_report',
           title: 'Escalation Analysis',
           content: `Escalation analysis and resolution for: ${task.title}`

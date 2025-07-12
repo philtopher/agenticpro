@@ -1,6 +1,6 @@
 import { IStorage } from "../storage";
 import { GLOBAL_PROMPTS } from "./agentPromptsExtended";
-import { azureOpenAIService } from "./azureOpenAI";
+import { openAIService } from "./openAI";
 
 export interface InterAgentMessage {
   from: string;
@@ -14,14 +14,14 @@ export class MessageRoutingService {
 
   async parseInterAgentMessages(chatText: string): Promise<InterAgentMessage[]> {
     try {
-      // Use Azure OpenAI if available, otherwise fall back to simulation
-      if (azureOpenAIService.isConfigured()) {
+      // Use OpenAI if available, otherwise fall back to simulation
+      if (openAIService.isConfigured()) {
         const prompt = `${GLOBAL_PROMPTS.messageRoutingPrompt}
 
 Chat Text:
 ${chatText}`;
         
-        const aiResponse = await azureOpenAIService.generateJSONResponse(prompt);
+        const aiResponse = await openAIService.generateJSONResponse(prompt);
         return Array.isArray(aiResponse) ? aiResponse : [];
       } else {
         // Fallback to simulation

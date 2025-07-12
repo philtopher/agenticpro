@@ -1,6 +1,6 @@
 import { IStorage } from "../storage";
 import { GLOBAL_PROMPTS } from "./agentPromptsExtended";
-import { azureOpenAIService } from "./azureOpenAI";
+import { openAIService } from "./openAI";
 
 export interface FileSummary {
   summary: string[];
@@ -13,15 +13,15 @@ export class FileSummarizerService {
 
   async summarizeFile(content: string, filename: string): Promise<FileSummary> {
     try {
-      // Use Azure OpenAI if available, otherwise fall back to simulation
-      if (azureOpenAIService.isConfigured()) {
+      // Use OpenAI if available, otherwise fall back to simulation
+      if (openAIService.isConfigured()) {
         const prompt = `${GLOBAL_PROMPTS.summarizerPrompt}
 
 File: ${filename}
 Content:
 ${content}`;
         
-        const aiResponse = await azureOpenAIService.generateJSONResponse(prompt);
+        const aiResponse = await openAIService.generateJSONResponse(prompt);
         return {
           summary: aiResponse.summary || [],
           actions: aiResponse.actions || [],
