@@ -44,9 +44,10 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
       resetForm();
     },
     onError: (error) => {
+      console.error("Task creation error:", error);
       toast({
-        title: "Error",
-        description: "Failed to create task. Please try again.",
+        title: "Error", 
+        description: `Failed to create task: ${error.message || "Please try again."}`,
         variant: "destructive",
       });
     },
@@ -62,6 +63,14 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log("Form submitted with data:", {
+      title: title.trim(),
+      description: description.trim(),
+      assignedTo,
+      priority,
+      tags
+    });
     
     if (!title.trim() || !description.trim()) {
       toast({
@@ -85,6 +94,7 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
       }
     };
 
+    console.log("Task data being sent:", taskData);
     createTaskMutation.mutate(taskData);
   };
 
