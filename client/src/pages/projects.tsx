@@ -238,10 +238,7 @@ export default function Projects() {
                     <SelectContent>
                       {METHODOLOGY_TYPES.map((method) => (
                         <SelectItem key={method.id} value={method.id}>
-                          <div>
-                            <div className="font-medium">{method.name}</div>
-                            <div className="text-xs text-gray-500">{method.description}</div>
-                          </div>
+                          {method.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
