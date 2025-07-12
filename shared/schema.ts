@@ -164,7 +164,7 @@ export const notificationRelations = relations(notifications, ({ one }) => ({
 export const insertAgentSchema = createInsertSchema(agents).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   workflow: z.any().optional(),
-  assignedToId: z.number().optional().nullable(),
+  assignedToId: z.union([z.number(), z.string().transform(val => parseInt(val))]).optional().nullable(),
   status: z.string().optional(),
   tags: z.array(z.string()).optional()
 });

@@ -72,12 +72,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/tasks', async (req: any, res) => {
     try {
-      const taskData = insertTaskSchema.parse({
+      // Process and convert the input data
+      const rawData = {
         ...req.body,
+        assignedToId: req.body.assignedToId ? parseInt(req.body.assignedToId) : null,
         createdById: null, // No auth required for testing
         status: "pending",
-        tags: req.body.tags || []
-      });
+        tags: req.body.tags || [],
+        workflow: {
+          stage: "requirements",
+          history: [],
+          nextAgent: "product_manager"
+        }
+      };
+      
+      const taskData = insertTaskSchema.parse(rawData);
       
       const task = await taskService.createTask(taskData);
       
