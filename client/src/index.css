@@ -1,0 +1,316 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(240, 10%, 3.9%);
+  --muted: hsl(240, 4.8%, 95.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(240, 10%, 3.9%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(240, 10%, 3.9%);
+  --border: hsl(240, 5.9%, 90%);
+  --input: hsl(240, 5.9%, 90%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(0, 0%, 98%);
+  --secondary: hsl(240, 4.8%, 95.9%);
+  --secondary-foreground: hsl(240, 5.9%, 10%);
+  --accent: hsl(240, 4.8%, 95.9%);
+  --accent-foreground: hsl(240, 5.9%, 10%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 10%, 3.9%);
+  --radius: 0.5rem;
+
+  /* Custom colors matching the design */
+  --blue-600: hsl(221, 83%, 53%);
+  --blue-700: hsl(221, 83%, 45%);
+  --purple-600: hsl(271, 81%, 56%);
+  --green-500: hsl(142, 76%, 36%);
+  --green-600: hsl(142, 76%, 32%);
+  --yellow-500: hsl(48, 96%, 53%);
+  --yellow-600: hsl(48, 96%, 45%);
+  --red-500: hsl(0, 84%, 60%);
+  --red-600: hsl(0, 84%, 52%);
+  --gray-50: hsl(0, 0%, 98%);
+  --gray-100: hsl(240, 5%, 96%);
+  --gray-200: hsl(240, 6%, 90%);
+  --gray-300: hsl(240, 5%, 84%);
+  --gray-400: hsl(240, 5%, 64%);
+  --gray-500: hsl(240, 4%, 46%);
+  --gray-600: hsl(240, 5%, 34%);
+  --gray-700: hsl(240, 5%, 26%);
+  --gray-800: hsl(240, 4%, 16%);
+  --gray-900: hsl(240, 6%, 10%);
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(0, 0%, 98%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--blue-600), var(--purple-600));
+  }
+
+  .status-active {
+    @apply bg-green-500;
+  }
+
+  .status-busy {
+    @apply bg-yellow-500;
+  }
+
+  .status-unhealthy {
+    @apply bg-red-500;
+  }
+
+  .status-offline {
+    @apply bg-gray-400;
+  }
+
+  .priority-low {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  .priority-medium {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .priority-high {
+    @apply bg-orange-100 text-orange-800;
+  }
+
+  .priority-urgent {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .task-pending {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  .task-in-progress {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .task-completed {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .task-failed {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .task-escalated {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .artifact-code {
+    @apply bg-blue-100 text-blue-600;
+  }
+
+  .artifact-specification {
+    @apply bg-green-100 text-green-600;
+  }
+
+  .artifact-test-case {
+    @apply bg-purple-100 text-purple-600;
+  }
+
+  .artifact-documentation {
+    @apply bg-yellow-100 text-yellow-600;
+  }
+
+  .artifact-report {
+    @apply bg-red-100 text-red-600;
+  }
+
+  .communication-handoff {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .communication-escalation {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .communication-approval {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .communication-rejection {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .health-critical {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .health-high {
+    @apply bg-orange-100 text-orange-800;
+  }
+
+  .health-medium {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .health-low {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(240, 5%, 96%);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(240, 5%, 84%);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(240, 5%, 64%);
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Loading states */
+  .loading-skeleton {
+    @apply bg-gray-200 animate-pulse rounded;
+  }
+
+  .loading-skeleton::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Focus states */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+  }
+
+  /* Hover transitions */
+  .hover-lift {
+    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+  }
+
+  /* Status indicators */
+  .status-indicator {
+    @apply inline-flex items-center justify-center w-2 h-2 rounded-full;
+  }
+
+  .status-indicator.active {
+    @apply bg-green-500;
+  }
+
+  .status-indicator.busy {
+    @apply bg-yellow-500;
+  }
+
+  .status-indicator.unhealthy {
+    @apply bg-red-500;
+  }
+
+  .status-indicator.offline {
+    @apply bg-gray-400;
+  }
+
+  /* Agent type icons */
+  .agent-icon {
+    @apply w-8 h-8 rounded-lg flex items-center justify-center text-sm;
+  }
+
+  .agent-icon.product-manager {
+    @apply bg-blue-100 text-blue-600;
+  }
+
+  .agent-icon.business-analyst {
+    @apply bg-green-100 text-green-600;
+  }
+
+  .agent-icon.developer {
+    @apply bg-purple-100 text-purple-600;
+  }
+
+  .agent-icon.qa-engineer {
+    @apply bg-yellow-100 text-yellow-600;
+  }
+
+  .agent-icon.product-owner {
+    @apply bg-red-100 text-red-600;
+  }
+
+  .agent-icon.engineering-lead {
+    @apply bg-gray-100 text-gray-600;
+  }
+}

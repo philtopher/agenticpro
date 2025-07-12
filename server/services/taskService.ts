@@ -1,0 +1,165 @@
+import { IStorage, Task, InsertTask } from "@shared/schema";
+import { CommunicationService } from "./communicationService";
+
+export class TaskService {
+  private communicationService: CommunicationService;
+
+  constructor(private storage: IStorage) {
+    this.communicationService = new CommunicationService(storage);
+  }
+
+  async createTask(taskData: InsertTask): Promise<Task> {
+    // Set initial workflow state
+    const workflow = {
+      stage: "requirements",
+      nextAgent: "product_manager",
+      history: []
+    };
+
+    const task = await this.storage.createTask({
+      ...taskData,
+      workflow,
+      status: "pending"
+    });
+
+    // Auto-assign to Product Manager if no specific assignment
+    if (!task.assignedToId) {
+      const productManager = await this.storage.getAgentByType("product_manager");
+      if (productManager) {
+        await this.assignTask(task.id, productManager.id);
+      }
+    }
+
+    return task;
+  }
+
+  async updateTask(taskId: number, updates: Partial<Task>): Promise<Task> {
+    const task = await this.storage.updateTask(taskId, updates);
+    
+    // Trigger workflow progression if status changed
+    if (updates.status) {
+      await this.progressWorkflow(task);
+    }
+
+    return task;
+  }
+
+  async assignTask(taskId: number, agentId: number): Promise<void> {
+    await this.storage.assignTask(taskId, agentId);
+    
+    // Update agent load
+    const agent = await this.storage.getAgent(agentId);
+    if (agent) {
+      await this.storage.updateAgent(agentId, {
+        currentLoad: agent.currentLoad + 1
+      });
+    }
+  }
+
+  async progressWorkflow(task: Task): Promise<void> {
+    const workflow = task.workflow as any;
+    
+    switch (task.status) {
+      case "completed":
+        await this.handleTaskCompletion(task);
+        break;
+      case "failed":
+        await this.handleTaskFailure(task);
+        break;
+      case "escalated":
+        await this.handleTaskEscalation(task);
+        break;
+    }
+  }
+
+  private async handleTaskCompletion(task: Task): Promise<void> {
+    const workflow = task.workflow as any;
+    
+    // Determine next agent in workflow
+    const nextAgent = this.determineNextAgent(workflow.stage);
+    
+    if (nextAgent) {
+      const agent = await this.storage.getAgentByType(nextAgent);
+      if (agent) {
+        // Create handoff communication
+        await this.communicationService.createCommunication({
+          fromAgentId: task.assignedToId!,
+          toAgentId: agent.id,
+          taskId: task.id,
+          message: `Task "${task.title}" completed. Ready for ${nextAgent} review.`,
+          messageType: "handoff"
+        });
+
+        // Update task workflow
+        await this.storage.updateTask(task.id, {
+          assignedToId: agent.id,
+          status: "in_progress",
+          workflow: {
+            ...workflow,
+            stage: this.getNextStage(workflow.stage),
+            nextAgent,
+            history: [...(workflow.history || []), {
+              stage: workflow.stage,
+              completedAt: new Date(),
+              agent: task.assignedToId
+            }]
+          }
+        });
+      }
+    }
+  }
+
+  private async handleTaskFailure(task: Task): Promise<void> {
+    // Escalate to Engineering Lead
+    const engineeringLead = await this.storage.getAgentByType("engineering_lead");
+    if (engineeringLead) {
+      await this.storage.assignTask(task.id, engineeringLead.id);
+      
+      await this.communicationService.createCommunication({
+        fromAgentId: task.assignedToId!,
+        toAgentId: engineeringLead.id,
+        taskId: task.id,
+        message: `Task "${task.title}" failed. Escalating for technical review.`,
+        messageType: "escalation"
+      });
+    }
+  }
+
+  private async handleTaskEscalation(task: Task): Promise<void> {
+    // Create health event
+    await this.storage.createHealthEvent({
+      agentId: task.assignedToId!,
+      eventType: "escalation",
+      severity: "high",
+      details: {
+        taskId: task.id,
+        taskTitle: task.title,
+        reason: "Task escalated due to failure or blocking issue"
+      }
+    });
+  }
+
+  private determineNextAgent(currentStage: string): string | null {
+    const workflow = {
+      "requirements": "business_analyst",
+      "analysis": "developer",
+      "development": "qa_engineer",
+      "testing": "product_owner",
+      "review": null
+    };
+
+    return workflow[currentStage] || null;
+  }
+
+  private getNextStage(currentStage: string): string {
+    const stages = {
+      "requirements": "analysis",
+      "analysis": "development",
+      "development": "testing",
+      "testing": "review",
+      "review": "completed"
+    };
+
+    return stages[currentStage] || "completed";
+  }
+}
