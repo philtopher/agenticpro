@@ -23,6 +23,8 @@ AgentFlow is a comprehensive autonomous AI-powered software development lifecycl
 - **Diagram Generation**: Mermaid-based workflow and task flow visualization
 - **Enhanced Prompts**: Role-specific planner, reminder, and governor prompts for each agent
 - **Inter-Agent Coordination**: Advanced communication parsing and routing protocols
+- **File Summarization**: AI-powered document analysis and task generation
+- **Message Routing**: Intelligent inter-agent communication parsing
 
 ✅ **SYSTEM VALIDATION COMPLETE**
 - **Task Creation**: Successfully tested task creation with automatic Product Manager assignment
@@ -72,28 +74,81 @@ Preferred communication style: Simple, everyday language.
   - `artifacts` - Generated code, docs, and deliverables
   - `health_events` - System monitoring and diagnostics
 
+## Platform Features
+
+✅ **Multi-agent SDLC Coverage**
+- AI-generated: Epics, Features, User Stories, Acceptance Criteria (min 5), Test Cases
+- BPMN, DFD, ER diagrams, architecture sketches
+- Figma-style UX mockups or stubs
+- Developer prompts compatible with Copilot, Replit, Loveable
+- Infra templates: Azure PaaS, GitHub workflows, CI/CD pipelines
+
+✅ **Instruction & Policy Awareness**
+- Users can upload project-specific instructions, policy documents, or design rules
+- Prompts, stories, code, and tests must abide by these documents
+- If a document is mentioned in the input prompt, its content is enforced in the output
+
+✅ **Smart Prompt Scheduling**
+- Each user receives a Daily Prompt Panel with prioritized task prompts
+- Prompts show the task, suggested priority (1–4), and allow reordering
+- An AI assistant sidebar explains each task and assists with cross-project context
+
+✅ **Role-Based Access Control**
+- Admin defines who can create/export projects, upload docs, invite/remove users
+- Access controlled at: platform, project, and feature level
+- Users onboard via email invite > verify > join (best practices from Jira/ADO)
+
+✅ **Integrations**
+- Jira, Azure DevOps, GitHub Issues
+- Import stories, tasks, test cases
+- Export AI-generated assets back to those platforms
+- Sync with boards and burndown charts
+
+✅ **Prompt-Aware Prioritisation System**
+- Agents classify prompts based on urgency and category:
+  Critical Ops > Live Bug > Blocker > Feature > Idea
+- Zara (Admin Governor) can adjust daily prompt frequency or divide incoming prompts across projects
+- Admins can override priority settings
+
+✅ **Feedback & Iteration**
+- Users can give feedback on AI outputs
+- Agents will ask follow-up clarifications if requirements are vague or incomplete
+- Continuous improvement through instruction fine-tuning
+
 ## Key Components
 
 ### Multi-Agent System
-Six specialized AI agents with distinct roles and advanced AI-powered decision making:
-1. **Product Manager** - Requirements clarification and scope management 
+Ten specialized AI agents with distinct roles and advanced AI-powered decision making:
+1. **Sam (Senior Product Manager)** - Requirements clarification and scope management 
    - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
-   - Capabilities: Strategic planning, requirement analysis, acceptance criteria creation
-2. **Business Analyst** - User story creation and workflow analysis
-   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
-   - Capabilities: User story generation, workflow documentation, edge case identification
-3. **Developer** - Code implementation and architecture
-   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
-   - Capabilities: Code generation, architecture planning, technical implementation
-4. **QA Engineer** - Test case creation and execution
-   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
-   - Capabilities: Test case generation, quality validation, bug reporting
-5. **Product Owner** - Final approval and business validation
+   - Capabilities: Strategic planning, requirement analysis, acceptance criteria creation, epics, features
+2. **Ollie (Product Owner)** - Final approval and business validation
    - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
    - Capabilities: Final approval decisions, business validation, stakeholder communication
-6. **Engineering Lead** - Technical oversight and team coordination
+3. **Bailey (Senior Business Analyst)** - User story creation and workflow analysis
    - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
-   - Capabilities: Team coordination, technical leadership, escalation handling
+   - Capabilities: User story generation, workflow documentation, edge case identification, BPMN diagrams
+4. **Sienna (Senior Solution Designer)** - UI/UX design and system interfaces
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: UI/UX wireframes, mockups, DFD diagrams, design prototypes
+5. **Aria (Senior Solutions Architect)** - Technical architecture and data modeling
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Architecture blueprints, data modeling, integration patterns, technical specifications
+6. **Dex (Senior Developer)** - Code implementation and scaffolding
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Code generation, scaffolding prompts, technical implementation, policy-aware coding
+7. **Tess (Senior QA/Test Engineer)** - Test case creation and execution
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Test case generation, quality validation, bug reporting, test automation
+8. **Nova (Senior DevOps/Infra Engineer)** - Infrastructure and CI/CD
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Infrastructure-as-code, CI/CD pipelines, deployment automation, monitoring
+9. **Emi (Engineering Manager/Tech Lead)** - Technical leadership and coordination
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Team coordination, technical leadership, mentoring, resource management
+10. **Zara (Admin + Platform Governor)** - Platform governance and oversight
+    - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+    - Capabilities: Platform governance, agent supervision, priority management, admin controls
 
 ### Task Orchestration
 - **Workflow Engine**: Automated task routing between agents
@@ -120,6 +175,8 @@ Six specialized AI agents with distinct roles and advanced AI-powered decision m
 - **Storage**: Database-backed artifact persistence
 - **Diagram Generation**: Mermaid-based workflow and task flow visualization
 - **Visual Analytics**: Agent load diagrams and performance visualization
+- **File Processing**: AI-powered document analysis and summarization
+- **Communication Intelligence**: Inter-agent message parsing and routing
 
 ## Data Flow
 

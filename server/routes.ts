@@ -13,6 +13,8 @@ import { PlannerService } from "./services/plannerService";
 import { ReminderService } from "./services/reminderService";
 import { GovernorService } from "./services/governorService";
 import { DiagramService } from "./services/diagramService";
+import { FileSummarizerService } from "./services/fileSummarizerService";
+import { MessageRoutingService } from "./services/messageRoutingService";
 import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -27,6 +29,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const reminderService = new ReminderService(storage);
   const governorService = new GovernorService(storage);
   const diagramService = new DiagramService(storage);
+  const fileSummarizerService = new FileSummarizerService(storage);
+  const messageRoutingService = new MessageRoutingService(storage);
 
   // Initialize agents on startup
   await agentService.initializeAgents();
@@ -293,6 +297,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating agent load diagram:", error);
       res.status(500).json({ message: "Failed to generate agent load diagram" });
+    }
+  });
+
+  // File summarization endpoints
+  app.post('/api/files/summarize', async (req, res) => {
+    try {
+      const { content, filename } = req.body;
+      if (!content || !filename) {
+        return res.status(400).json({ message: "Content and filename are required" });
+      }
+      
+      const summary = await fileSummarizerService.summarizeFile(content, filename);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error summarizing file:", error);
+      res.status(500).json({ message: "Failed to summarize file" });
+    }
+  });
+
+  // Message routing endpoints
+  app.post('/api/messages/parse', async (req, res) => {
+    try {
+      const { chatText } = req.body;
+      if (!chatText) {
+        return res.status(400).json({ message: "Chat text is required" });
+      }
+      
+      const messages = await messageRoutingService.parseInterAgentMessages(chatText);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error parsing messages:", error);
+      res.status(500).json({ message: "Failed to parse messages" });
     }
   });
 

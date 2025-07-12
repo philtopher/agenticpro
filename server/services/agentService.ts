@@ -11,9 +11,9 @@ export class AgentService {
       const defaultAgents: InsertAgent[] = [
         {
           type: "product_manager",
-          name: "Product Manager",
+          name: "Sam",
           capabilities: {
-            skills: ["requirements_clarification", "scope_management", "acceptance_criteria"],
+            skills: ["requirements_clarification", "scope_management", "acceptance_criteria", "epics", "features"],
             maxConcurrentTasks: 5,
             avgResponseTime: 300 // 5 minutes
           },
@@ -22,9 +22,9 @@ export class AgentService {
         },
         {
           type: "business_analyst",
-          name: "Business Analyst",
+          name: "Bailey",
           capabilities: {
-            skills: ["user_story_creation", "workflow_analysis", "documentation"],
+            skills: ["user_story_creation", "workflow_analysis", "documentation", "acceptance_criteria", "bpmn"],
             maxConcurrentTasks: 8,
             avgResponseTime: 450 // 7.5 minutes
           },
@@ -33,9 +33,9 @@ export class AgentService {
         },
         {
           type: "developer",
-          name: "Developer",
+          name: "Dex",
           capabilities: {
-            skills: ["coding", "architecture", "code_review", "testing"],
+            skills: ["coding", "architecture", "code_review", "testing", "scaffolding"],
             maxConcurrentTasks: 3,
             avgResponseTime: 1800 // 30 minutes
           },
@@ -44,9 +44,9 @@ export class AgentService {
         },
         {
           type: "qa_engineer",
-          name: "QA Engineer",
+          name: "Tess",
           capabilities: {
-            skills: ["test_case_creation", "test_execution", "bug_reporting"],
+            skills: ["test_case_creation", "test_execution", "bug_reporting", "quality_assurance"],
             maxConcurrentTasks: 6,
             avgResponseTime: 600 // 10 minutes
           },
@@ -55,9 +55,9 @@ export class AgentService {
         },
         {
           type: "product_owner",
-          name: "Product Owner",
+          name: "Ollie",
           capabilities: {
-            skills: ["final_approval", "requirement_validation", "priority_setting"],
+            skills: ["final_approval", "requirement_validation", "priority_setting", "stakeholder_communication"],
             maxConcurrentTasks: 4,
             avgResponseTime: 900 // 15 minutes
           },
@@ -65,15 +65,59 @@ export class AgentService {
           maxLoad: 4
         },
         {
-          type: "engineering_lead",
-          name: "Engineering Lead",
+          type: "solution_designer",
+          name: "Sienna",
           capabilities: {
-            skills: ["technical_leadership", "escalation_handling", "resource_management"],
+            skills: ["ui_ux_design", "wireframes", "mockups", "system_design", "dfd"],
+            maxConcurrentTasks: 5,
+            avgResponseTime: 720 // 12 minutes
+          },
+          status: "active",
+          maxLoad: 5
+        },
+        {
+          type: "solutions_architect",
+          name: "Aria",
+          capabilities: {
+            skills: ["architecture_design", "data_modeling", "integration_patterns", "technical_blueprints"],
+            maxConcurrentTasks: 3,
+            avgResponseTime: 1200 // 20 minutes
+          },
+          status: "active",
+          maxLoad: 3
+        },
+        {
+          type: "devops_engineer",
+          name: "Nova",
+          capabilities: {
+            skills: ["infrastructure", "cicd", "deployment", "monitoring", "iac_templates"],
+            maxConcurrentTasks: 4,
+            avgResponseTime: 900 // 15 minutes
+          },
+          status: "active",
+          maxLoad: 4
+        },
+        {
+          type: "engineering_manager",
+          name: "Emi",
+          capabilities: {
+            skills: ["technical_leadership", "team_coordination", "resource_management", "mentoring"],
             maxConcurrentTasks: 5,
             avgResponseTime: 600 // 10 minutes
           },
           status: "active",
           maxLoad: 5
+        },
+        {
+          type: "admin_governor",
+          name: "Zara",
+          capabilities: {
+            skills: ["platform_governance", "agent_oversight", "admin_controls", "priority_management"],
+            maxConcurrentTasks: 10,
+            avgResponseTime: 180 // 3 minutes
+          },
+          status: "active",
+          maxLoad: 10
         }
       ];
 
