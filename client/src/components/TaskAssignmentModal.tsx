@@ -100,12 +100,15 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6" aria-describedby="task-assignment-description">
         <DialogHeader>
           <DialogTitle>Assign New Task</DialogTitle>
+          <div id="task-assignment-description" className="sr-only">
+            Create and assign a new task to one of the AI agents
+          </div>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Task Title *
@@ -126,12 +129,13 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the task requirements..."
-              rows={4}
+              rows={3}
+              className="resize-none"
               required
             />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Assign To
@@ -212,14 +216,14 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Cancel
             </Button>
             <Button 
               type="submit" 
               disabled={createTaskMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
             >
               {createTaskMutation.isPending ? "Creating..." : "Assign Task"}
             </Button>
