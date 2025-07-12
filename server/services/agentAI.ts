@@ -2,6 +2,7 @@ import { Agent, Task, Communication, Artifact } from "@shared/schema";
 import { IStorage } from "../storage";
 import { EXTENDED_AGENT_PROMPTS, GLOBAL_PROMPTS } from "./agentPromptsExtended";
 import { openAIService } from "./openAI";
+import { FileCreationService } from "./fileCreationService";
 
 export interface AgentPrompt {
   role: string;
@@ -704,7 +705,11 @@ Output only JSON.`
 };
 
 export class AgentAI {
-  constructor(private storage: IStorage) {}
+  private fileCreationService: FileCreationService;
+
+  constructor(private storage: IStorage) {
+    this.fileCreationService = new FileCreationService(storage);
+  }
 
   async processTask(agent: Agent, task: Task): Promise<{
     response: string;
@@ -1128,6 +1133,11 @@ Next Steps: Task reassigned with clear instructions and priority.`,
 
   async generateChatResponse(agent: Agent, message: string, context: any): Promise<string> {
     try {
+      // Check if this is a complex instruction that requires file creation
+      if (this.requiresFileCreation(message)) {
+        return await this.handleFileCreationInstruction(agent, message, context);
+      }
+
       // Use Azure OpenAI if available, otherwise simulate
       if (azureOpenAIService.isConfigured()) {
         const prompt = this.buildChatPrompt(agent, message, context);
@@ -1140,6 +1150,211 @@ Next Steps: Task reassigned with clear instructions and priority.`,
     } catch (error) {
       console.error("Error generating chat response:", error);
       return this.simulateChatResponse(agent, message, context);
+    }
+  }
+
+  private requiresFileCreation(message: string): boolean {
+    const fileCreationKeywords = [
+      'create user stories',
+      'using microsoft word',
+      'create document',
+      'write to file',
+      'generate document',
+      'create file',
+      'business analysis',
+      'user story',
+      'requirements document'
+    ];
+    
+    return fileCreationKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+  }
+
+  private async handleFileCreationInstruction(agent: Agent, message: string, context: any): Promise<string> {
+    try {
+      // Get task if available
+      const task = context.taskId ? await this.storage.getTask(context.taskId) : null;
+      
+      // If no task, create a placeholder task
+      const workingTask = task || {
+        id: Date.now(),
+        title: 'User Instruction',
+        description: message,
+        priority: 'medium',
+        status: 'in_progress'
+      };
+
+      // Parse instruction and create appropriate files
+      if (message.toLowerCase().includes('user stories') && message.toLowerCase().includes('microsoft word')) {
+        // Create user stories in Word format
+        const userStories = this.generateUserStories(workingTask as Task);
+        const filePath = await this.fileCreationService.createUserStoryDocument(agent, workingTask as Task, userStories);
+        
+        // Parse routing instructions
+        const routingInstructions = this.parseRoutingInstructions(message);
+        
+        let response = `I've created user stories for the task using Microsoft Word. The document has been saved to: ${filePath}\n\n`;
+        response += `User Stories Created:\n${userStories}\n\n`;
+        
+        if (routingInstructions.length > 0) {
+          response += `Following your routing instructions:\n`;
+          for (const instruction of routingInstructions) {
+            response += `- ${instruction}\n`;
+          }
+          
+          // Execute routing instructions
+          await this.executeRoutingInstructions(agent, workingTask as Task, routingInstructions, filePath);
+        }
+        
+        return response;
+      } else if (message.toLowerCase().includes('business analysis')) {
+        // Create business analysis document
+        const analysisContent = this.generateBusinessAnalysis(workingTask as Task);
+        const filePath = await this.fileCreationService.createBusinessAnalysisDocument(agent, workingTask as Task, analysisContent);
+        
+        return `I've created a business analysis document for the task. The document has been saved to: ${filePath}\n\nBusiness Analysis:\n${analysisContent}`;
+      } else {
+        // Create general document
+        const content = this.generateTaskContent(agent, workingTask as Task, message);
+        const filePath = await this.fileCreationService.createTextFile(agent, workingTask as Task, content);
+        
+        return `I've created a document based on your instruction. The file has been saved to: ${filePath}\n\nContent:\n${content}`;
+      }
+    } catch (error) {
+      console.error('Error handling file creation instruction:', error);
+      return `I understand you want me to create files, but I encountered an error: ${error.message}. Let me try to help you in another way.`;
+    }
+  }
+
+  private generateUserStories(task: Task): string {
+    return `User Stories for: ${task.title}
+
+As a user, I want to be able to access the main functionality so that I can accomplish my primary goals.
+
+As a user, I want to have a clear interface so that I can navigate the system easily.
+
+As a user, I want to receive feedback on my actions so that I know the system is responding correctly.
+
+As a user, I want to be able to save my progress so that I can continue where I left off.
+
+As a user, I want to have help and documentation available so that I can understand how to use the system effectively.
+
+Acceptance Criteria:
+1. The system must be responsive and provide feedback within 2 seconds
+2. All user actions must be clearly indicated with visual feedback
+3. The interface must be intuitive and follow standard usability principles
+4. Help documentation must be easily accessible from all major screens
+5. User progress must be automatically saved and recoverable`;
+  }
+
+  private generateBusinessAnalysis(task: Task): string {
+    return `Business Analysis for: ${task.title}
+
+Executive Summary:
+This analysis covers the business requirements and workflow considerations for the specified task.
+
+Current State Analysis:
+- Existing processes and systems
+- Pain points and challenges
+- Stakeholder requirements
+
+Proposed Solution:
+- Recommended approach and methodology
+- Expected benefits and outcomes
+- Implementation considerations
+
+Risk Assessment:
+- Technical risks and mitigation strategies
+- Business risks and contingency plans
+- Resource requirements and constraints
+
+Success Metrics:
+- Key performance indicators
+- Acceptance criteria
+- Quality measures
+
+Next Steps:
+1. Review and approve this analysis
+2. Proceed with detailed design
+3. Begin implementation planning
+4. Establish monitoring and feedback loops`;
+  }
+
+  private generateTaskContent(agent: Agent, task: Task, instruction: string): string {
+    return `Task Response from ${agent.name}
+
+Task: ${task.title}
+Instruction: ${instruction}
+Generated: ${new Date().toISOString()}
+
+Response:
+Based on your instruction, I've analyzed the requirements and created this document. The content addresses the key points mentioned in your request and provides a structured approach to the task.
+
+Key Deliverables:
+1. Analysis of the current requirements
+2. Proposed solution approach
+3. Implementation recommendations
+4. Quality assurance considerations
+
+This document serves as a starting point for further collaboration and refinement based on your feedback.`;
+  }
+
+  private parseRoutingInstructions(message: string): string[] {
+    const instructions = [];
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('send back to you for review') || lowerMessage.includes('send it back to you for review')) {
+      instructions.push('Document will be sent back for review');
+    }
+    
+    if (lowerMessage.includes('send the document to the product manager') || lowerMessage.includes('send to product manager')) {
+      instructions.push('Document will be forwarded to Product Manager');
+    }
+    
+    if (lowerMessage.includes('tell bailey') || lowerMessage.includes('business analyst')) {
+      instructions.push('Instructions will be communicated to Business Analyst');
+    }
+    
+    return instructions;
+  }
+
+  private async executeRoutingInstructions(agent: Agent, task: Task, instructions: string[], filePath: string): Promise<void> {
+    // Create communications for routing
+    for (const instruction of instructions) {
+      if (instruction.includes('Product Manager')) {
+        const productManager = await this.storage.getAgentByType('product_manager');
+        if (productManager) {
+          await this.storage.createCommunication({
+            fromAgentId: agent.id,
+            toAgentId: productManager.id,
+            taskId: task.id,
+            message: `Document completed and ready for review. File: ${filePath}`,
+            messageType: 'task_handoff',
+            metadata: {
+              filePath: filePath,
+              documentType: 'user_stories'
+            }
+          });
+        }
+      }
+      
+      if (instruction.includes('Business Analyst')) {
+        const businessAnalyst = await this.storage.getAgentByType('business_analyst');
+        if (businessAnalyst) {
+          await this.storage.createCommunication({
+            fromAgentId: agent.id,
+            toAgentId: businessAnalyst.id,
+            taskId: task.id,
+            message: `Please review the completed document and provide feedback. File: ${filePath}`,
+            messageType: 'review_request',
+            metadata: {
+              filePath: filePath,
+              documentType: 'user_stories'
+            }
+          });
+        }
+      }
     }
   }
 

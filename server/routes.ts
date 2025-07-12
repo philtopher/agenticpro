@@ -431,6 +431,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
         }
       });
+
+      // Process agent instruction if targeted to a specific agent
+      if (toAgentId) {
+        const agent = await storage.getAgent(toAgentId);
+        if (agent) {
+          try {
+            // Generate agent response
+            const agentAI = new AgentAI(storage);
+            const response = await agentAI.generateChatResponse(agent, message, { taskId });
+            
+            // Create agent response communication
+            const agentResponse = await communicationService.createCommunication({
+              fromAgentId: agent.id,
+              toAgentId: null,
+              taskId: taskId || null,
+              message: response,
+              messageType: 'agent_response',
+              metadata: {
+                timestamp: new Date().toISOString(),
+                responseToMessage: communication.id,
+              },
+            });
+
+            // Broadcast agent response
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'communication_created',
+                  data: agentResponse
+                }));
+              }
+            });
+          } catch (error) {
+            console.error("Error generating agent response:", error);
+          }
+        }
+      }
       
       res.status(201).json(communication);
     } catch (error) {
