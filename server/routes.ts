@@ -118,6 +118,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI-powered task processing
+  app.post('/api/tasks/:id/process', async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      
+      await taskService.processTaskWithAI(taskId);
+      
+      // Broadcast task update to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'task_processed',
+            data: { taskId }
+          }));
+        }
+      });
+      
+      res.json({ message: "Task processed successfully" });
+    } catch (error) {
+      console.error("Error processing task:", error);
+      res.status(500).json({ message: "Failed to process task" });
+    }
+  });
+
   // Communication routes
   app.get('/api/communications', async (req, res) => {
     try {

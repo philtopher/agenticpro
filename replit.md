@@ -4,6 +4,28 @@
 
 AgentFlow is a comprehensive autonomous AI-powered software development lifecycle orchestration system. It simulates a real-world agile development team with six specialized AI agents that collaborate to complete software development tasks from requirements to deployment.
 
+## Recent Changes (Updated: January 12, 2025)
+
+✓ **Complete AI Agent System Implementation**
+- Added full AI agent decision-making system with specific role-based prompts
+- Implemented autonomous task processing with agent-to-agent workflow progression
+- Created comprehensive agent communication system with proper handoff protocols
+- Added artifact generation and storage for all agent outputs
+- Integrated real-time WebSocket updates for task progression
+
+✓ **Enhanced User Interface**
+- Clickable agents with detailed status information and health scores
+- Agent detail modal showing capabilities, current tasks, and communication history
+- AI-powered task processing buttons with real-time feedback
+- Enhanced task management with workflow progress tracking
+- Improved communication interface with agent-specific chat
+
+✓ **Workflow System**
+- Automated task routing between agents (Product Manager → Business Analyst → Developer → QA Engineer → Product Owner)
+- Task escalation protocols with Engineering Lead oversight
+- Memory system for context retention across agent interactions
+- Health monitoring system with automatic escalation triggers
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -39,13 +61,13 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Multi-Agent System
-Six specialized AI agents with distinct roles:
-1. **Product Manager** - Requirements clarification and scope management
-2. **Business Analyst** - User story creation and workflow analysis
-3. **Developer** - Code implementation and architecture
-4. **QA Engineer** - Test case creation and execution
-5. **Product Owner** - Final approval and business validation
-6. **Engineering Lead** - Technical oversight and team coordination
+Six specialized AI agents with distinct roles and AI-powered decision making:
+1. **Product Manager** - Requirements clarification and scope management (AI prompt: Clarifies ambiguous requirements, manages project scope, writes acceptance criteria)
+2. **Business Analyst** - User story creation and workflow analysis (AI prompt: Translates features into user stories, identifies edge cases, creates workflows)
+3. **Developer** - Code implementation and architecture (AI prompt: Writes clear, well-structured code, handles edge cases, prepares for testing)
+4. **QA Engineer** - Test case creation and execution (AI prompt: Generates comprehensive test cases, validates implementations, reports issues)
+5. **Product Owner** - Final approval and business validation (AI prompt: Reviews final implementation, gives APPROVED/REJECTED decisions)
+6. **Engineering Lead** - Technical oversight and team coordination (AI prompt: Monitors agent health, reassigns tasks, handles escalations)
 
 ### Task Orchestration
 - **Workflow Engine**: Automated task routing between agents

@@ -1,11 +1,14 @@
 import { IStorage, Task, InsertTask } from "@shared/schema";
 import { CommunicationService } from "./communicationService";
+import { AgentAI } from "./agentAI";
 
 export class TaskService {
   private communicationService: CommunicationService;
+  private agentAI: AgentAI;
 
   constructor(private storage: IStorage) {
     this.communicationService = new CommunicationService(storage);
+    this.agentAI = new AgentAI(storage);
   }
 
   async createTask(taskData: InsertTask): Promise<Task> {
@@ -72,6 +75,83 @@ export class TaskService {
     }
   }
 
+  async processTaskWithAI(taskId: number): Promise<void> {
+    const task = await this.storage.getTask(taskId);
+    if (!task || !task.assignedToId) return;
+
+    const currentAgent = await this.storage.getAgent(task.assignedToId);
+    if (!currentAgent) return;
+
+    try {
+      // Use AI to process the task
+      const aiResult = await this.agentAI.processTask(currentAgent, task);
+      
+      // Create communication record
+      await this.communicationService.createCommunication({
+        fromAgentId: currentAgent.id,
+        toAgentId: null,
+        taskId: task.id,
+        message: aiResult.response,
+        messageType: 'task_progress',
+        metadata: {
+          artifacts: aiResult.artifacts,
+          nextAgent: aiResult.nextAgent,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Create artifacts
+      for (const artifact of aiResult.artifacts) {
+        await this.storage.createArtifact({
+          taskId: task.id,
+          agentId: currentAgent.id,
+          type: artifact.type,
+          title: artifact.title,
+          content: artifact.content,
+          version: 1,
+          status: 'draft'
+        });
+      }
+
+      // Handle escalation
+      if (aiResult.shouldEscalate) {
+        await this.handleTaskEscalation(task, aiResult.escalationReason);
+        return;
+      }
+
+      // Move to next agent or complete task
+      if (aiResult.nextAgent) {
+        const nextAgent = await this.storage.getAgentByType(aiResult.nextAgent);
+        if (nextAgent) {
+          await this.assignTask(task.id, nextAgent.id);
+          
+          // Update workflow
+          const nextStage = this.getNextStage(task.workflow?.stage || 'requirements');
+          await this.updateTask(task.id, {
+            status: 'in_progress',
+            workflow: {
+              ...task.workflow,
+              stage: nextStage,
+              nextAgent: aiResult.nextAgent,
+              history: [...(task.workflow?.history || []), {
+                stage: task.workflow?.stage || 'requirements',
+                agent: currentAgent.type,
+                timestamp: new Date().toISOString(),
+                response: aiResult.response
+              }]
+            }
+          });
+        }
+      } else {
+        // Task completed
+        await this.updateTask(task.id, { status: 'completed' });
+      }
+    } catch (error) {
+      console.error('Error in AI workflow progression:', error);
+      await this.handleTaskFailure(task, error);
+    }
+  }
+
   private async handleTaskCompletion(task: Task): Promise<void> {
     const workflow = task.workflow as any;
     
@@ -125,7 +205,7 @@ export class TaskService {
     }
   }
 
-  private async handleTaskEscalation(task: Task): Promise<void> {
+  private async handleTaskEscalation(task: Task, reason?: string): Promise<void> {
     // Create health event
     await this.storage.createHealthEvent({
       agentId: task.assignedToId!,
@@ -134,7 +214,7 @@ export class TaskService {
       details: {
         taskId: task.id,
         taskTitle: task.title,
-        reason: "Task escalated due to failure or blocking issue"
+        reason: reason || "Task escalated due to failure or blocking issue"
       }
     });
   }
