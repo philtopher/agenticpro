@@ -16,6 +16,14 @@ AgentFlow is a comprehensive autonomous AI-powered software development lifecycl
 - **Health Monitoring**: Agent performance tracking with automatic escalation
 - **Task Processing**: AI-powered task processing buttons with real-time feedback
 
+✅ **ADVANCED AI AGENT CAPABILITIES IMPLEMENTED**
+- **Planner Agents**: Strategic planning with JSON-based action planning for each agent
+- **Reminder System**: Automated monitoring and nudging for overdue tasks
+- **Governor/Orchestrator**: Intelligent agent supervision, load balancing, and reassignment
+- **Diagram Generation**: Mermaid-based workflow and task flow visualization
+- **Enhanced Prompts**: Role-specific planner, reminder, and governor prompts for each agent
+- **Inter-Agent Coordination**: Advanced communication parsing and routing protocols
+
 ✅ **SYSTEM VALIDATION COMPLETE**
 - **Task Creation**: Successfully tested task creation with automatic Product Manager assignment
 - **AI Processing**: Verified AI agent decision-making with role-specific responses
@@ -23,6 +31,7 @@ AgentFlow is a comprehensive autonomous AI-powered software development lifecycl
 - **Workflow Progression**: Task routing between agents working correctly
 - **Database Integration**: All entities (tasks, agents, communications, artifacts) persisted
 - **Error Handling**: Escalation protocols and health monitoring functional
+- **Advanced Services**: Planner, Reminder, Governor, and Diagram services operational
 
 ✅ **USER INTERFACE ENHANCEMENTS**
 - **Agent Dashboard**: Clickable agents with detailed status and health scores
@@ -66,31 +75,51 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Multi-Agent System
-Six specialized AI agents with distinct roles and AI-powered decision making:
-1. **Product Manager** - Requirements clarification and scope management (AI prompt: Clarifies ambiguous requirements, manages project scope, writes acceptance criteria)
-2. **Business Analyst** - User story creation and workflow analysis (AI prompt: Translates features into user stories, identifies edge cases, creates workflows)
-3. **Developer** - Code implementation and architecture (AI prompt: Writes clear, well-structured code, handles edge cases, prepares for testing)
-4. **QA Engineer** - Test case creation and execution (AI prompt: Generates comprehensive test cases, validates implementations, reports issues)
-5. **Product Owner** - Final approval and business validation (AI prompt: Reviews final implementation, gives APPROVED/REJECTED decisions)
-6. **Engineering Lead** - Technical oversight and team coordination (AI prompt: Monitors agent health, reassigns tasks, handles escalations)
+Six specialized AI agents with distinct roles and advanced AI-powered decision making:
+1. **Product Manager** - Requirements clarification and scope management 
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Strategic planning, requirement analysis, acceptance criteria creation
+2. **Business Analyst** - User story creation and workflow analysis
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: User story generation, workflow documentation, edge case identification
+3. **Developer** - Code implementation and architecture
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Code generation, architecture planning, technical implementation
+4. **QA Engineer** - Test case creation and execution
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Test case generation, quality validation, bug reporting
+5. **Product Owner** - Final approval and business validation
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Final approval decisions, business validation, stakeholder communication
+6. **Engineering Lead** - Technical oversight and team coordination
+   - AI Prompts: Main system prompt, planner agent, reminder agent, governor oversight
+   - Capabilities: Team coordination, technical leadership, escalation handling
 
 ### Task Orchestration
 - **Workflow Engine**: Automated task routing between agents
 - **Load Balancing**: Dynamic task assignment based on agent capacity
 - **Escalation Handling**: Automatic escalation for blocked or failed tasks
 - **Status Tracking**: Real-time task progress monitoring
+- **Advanced Planning**: JSON-based action planning for each agent with strategic decision-making
+- **Governor Oversight**: Intelligent supervision and automatic task reassignment
+- **Reminder System**: Automated monitoring and nudging for overdue tasks
 
 ### Communication System
 - **Inter-Agent Messaging**: Structured communication protocols
 - **Handoff Management**: Seamless task transitions between agents
 - **Notification System**: Email and real-time alerts
 - **Audit Trail**: Complete communication history
+- **Advanced Parsing**: Inter-agent request parsing and routing
+- **Governor Coordination**: Intelligent agent supervision and intervention
+- **Reminder Notifications**: Automated follow-up system for task progress
 
 ### Artifact Management
 - **Version Control**: Automatic versioning of generated artifacts
 - **Type Classification**: Code, specifications, tests, documentation
 - **Approval Workflow**: Review and approval processes
 - **Storage**: Database-backed artifact persistence
+- **Diagram Generation**: Mermaid-based workflow and task flow visualization
+- **Visual Analytics**: Agent load diagrams and performance visualization
 
 ## Data Flow
 

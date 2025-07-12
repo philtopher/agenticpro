@@ -9,6 +9,10 @@ import { CommunicationService } from "./services/communicationService";
 import { ArtifactService } from "./services/artifactService";
 import { HealthService } from "./services/healthService";
 import { EmailService } from "./services/emailService";
+import { PlannerService } from "./services/plannerService";
+import { ReminderService } from "./services/reminderService";
+import { GovernorService } from "./services/governorService";
+import { DiagramService } from "./services/diagramService";
 import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -19,6 +23,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const artifactService = new ArtifactService(storage);
   const healthService = new HealthService(storage);
   const emailService = new EmailService(storage);
+  const plannerService = new PlannerService(storage);
+  const reminderService = new ReminderService(storage);
+  const governorService = new GovernorService(storage);
+  const diagramService = new DiagramService(storage);
 
   // Initialize agents on startup
   await agentService.initializeAgents();
@@ -204,6 +212,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Advanced AI Agent routes
+  // Planner endpoints
+  app.get('/api/agents/:id/plan', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const agent = await storage.getAgent(agentId);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const plan = await plannerService.generatePlan(agent);
+      res.json(plan);
+    } catch (error) {
+      console.error("Error generating plan:", error);
+      res.status(500).json({ message: "Failed to generate plan" });
+    }
+  });
+
+  // Governor endpoints  
+  app.get('/api/agents/:id/governance', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const agent = await storage.getAgent(agentId);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const decisions = await governorService.analyzeAgent(agent);
+      res.json(decisions);
+    } catch (error) {
+      console.error("Error analyzing agent:", error);
+      res.status(500).json({ message: "Failed to analyze agent" });
+    }
+  });
+
+  // Reminder endpoints
+  app.get('/api/agents/:id/reminders', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const agent = await storage.getAgent(agentId);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const reminders = await reminderService.generateRemindersForAgent(agent);
+      res.json(reminders);
+    } catch (error) {
+      console.error("Error generating reminders:", error);
+      res.status(500).json({ message: "Failed to generate reminders" });
+    }
+  });
+
+  // Diagram endpoints
+  app.get('/api/diagrams/workflow', async (req, res) => {
+    try {
+      const diagram = await diagramService.generateWorkflowDiagram();
+      res.json({ diagram });
+    } catch (error) {
+      console.error("Error generating workflow diagram:", error);
+      res.status(500).json({ message: "Failed to generate workflow diagram" });
+    }
+  });
+
+  app.get('/api/diagrams/task/:id', async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const diagram = await diagramService.generateTaskFlowDiagram(taskId);
+      res.json({ diagram });
+    } catch (error) {
+      console.error("Error generating task flow diagram:", error);
+      res.status(500).json({ message: "Failed to generate task flow diagram" });
+    }
+  });
+
+  app.get('/api/diagrams/agent-load', async (req, res) => {
+    try {
+      const diagram = await diagramService.generateAgentLoadDiagram();
+      res.json({ diagram });
+    } catch (error) {
+      console.error("Error generating agent load diagram:", error);
+      res.status(500).json({ message: "Failed to generate agent load diagram" });
+    }
+  });
+
   // User to agent communication
   app.post('/api/communicate', async (req, res) => {
     try {
@@ -360,6 +452,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Start email service
   emailService.startProcessing();
+
+  // Start advanced AI services
+  reminderService.startReminderService();
+  console.log("Reminder service started");
+  
+  governorService.startGovernorService();
+  console.log("Governor service started");
 
   return httpServer;
 }
