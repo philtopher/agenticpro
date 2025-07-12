@@ -52,7 +52,15 @@ export default function Chat() {
     : communications;
 
   const handleSendMessage = () => {
-    if (!message.trim() || !selectedAgent) return;
+    console.log("handleSendMessage called");
+    console.log("message:", message);
+    console.log("selectedAgent:", selectedAgent);
+    console.log("message.trim():", message.trim());
+    
+    if (!message.trim() || !selectedAgent) {
+      console.log("Validation failed - message or agent not selected");
+      return;
+    }
 
     const communicationData = {
       fromAgentId: null, // User message
@@ -66,6 +74,7 @@ export default function Chat() {
       },
     };
 
+    console.log("Sending communication data:", communicationData);
     sendCommunicationMutation.mutate(communicationData);
     
     // Send WebSocket message for real-time updates
@@ -242,9 +251,14 @@ export default function Chat() {
                 }}
               />
               <Button 
-                onClick={handleSendMessage}
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log("Button clicked");
+                  handleSendMessage();
+                }}
                 disabled={!selectedAgent || !message.trim() || sendCommunicationMutation.isPending}
                 className="self-end"
+                type="button"
               >
                 <Send className="h-4 w-4" />
               </Button>
