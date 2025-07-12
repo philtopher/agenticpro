@@ -36,6 +36,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize agents on startup
   await agentService.initializeAgents();
 
+  // AuthSetup will be called after routes are defined
+
   // Agent routes
   app.get('/api/agents', async (req, res) => {
     try {
@@ -113,7 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const taskId = parseInt(req.params.id);
       const updates = req.body;
       
-      const task = await taskService.updateTask(taskId, updates);
+      const task = await storage.updateTask(taskId, updates);
       res.json(task);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -126,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const taskId = parseInt(req.params.id);
       const { agentId } = req.body;
       
-      await taskService.assignTask(taskId, agentId);
+      await storage.assignTask(taskId, agentId);
       res.json({ message: "Task assigned successfully" });
     } catch (error) {
       console.error("Error assigning task:", error);
@@ -139,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const taskId = parseInt(req.params.id);
       
-      await taskService.processTaskWithAI(taskId);
+      await taskService.startAutomaticTaskProcessing(taskId);
       
       // Broadcast task update to WebSocket clients
       wss.clients.forEach((client) => {
@@ -155,6 +157,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing task:", error);
       res.status(500).json({ message: "Failed to process task" });
+    }
+  });
+
+  // Task communications endpoint
+  app.get('/api/tasks/:id/communications', async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const communications = await taskService.getTaskCommunications(taskId);
+      res.json(communications);
+    } catch (error) {
+      console.error("Error fetching task communications:", error);
+      res.status(500).json({ message: "Failed to fetch communications" });
+    }
+  });
+
+  // Agent control endpoints
+  app.post('/api/agents/:id/pause', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      await taskService.pauseAgent(agentId);
+      res.json({ message: "Agent paused successfully" });
+    } catch (error) {
+      console.error("Error pausing agent:", error);
+      res.status(500).json({ message: "Failed to pause agent" });
+    }
+  });
+
+  app.post('/api/agents/:id/resume', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      await taskService.resumeAgent(agentId);
+      res.json({ message: "Agent resumed successfully" });
+    } catch (error) {
+      console.error("Error resuming agent:", error);
+      res.status(500).json({ message: "Failed to resume agent" });
     }
   });
 
@@ -470,7 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const project = await taskService.createTask(projectData);
       
       // Trigger agent workflow
-      await taskService.progressWorkflow(project);
+      await taskService.startAutomaticTaskProcessing(project.id);
       
       res.json({ project, message: "Test workflow initiated" });
     } catch (error) {
@@ -484,6 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket setup
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  taskService.setWebSocketServer(wss);
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('Client connected to WebSocket');
