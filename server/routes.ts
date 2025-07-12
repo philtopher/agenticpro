@@ -62,16 +62,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const taskData = insertTaskSchema.parse({
         ...req.body,
-        createdById: "system", // Default to system user when no auth
+        createdById: null, // No auth required for testing
+        status: "pending",
+        tags: req.body.tags || []
       });
-      
-      // If no agent assigned, assign to Product Manager by default
-      if (!taskData.assignedToId) {
-        const productManager = await storage.getAgentByType('product_manager');
-        if (productManager) {
-          taskData.assignedToId = productManager.id;
-        }
-      }
       
       const task = await taskService.createTask(taskData);
       

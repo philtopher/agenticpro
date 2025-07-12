@@ -162,7 +162,12 @@ export const notificationRelations = relations(notifications, ({ one }) => ({
 
 // Insert schemas
 export const insertAgentSchema = createInsertSchema(agents).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  workflow: z.any().optional(),
+  assignedToId: z.number().optional().nullable(),
+  status: z.string().optional(),
+  tags: z.array(z.string()).optional()
+});
 export const insertCommunicationSchema = createInsertSchema(communications).omit({ id: true, createdAt: true });
 export const insertArtifactSchema = createInsertSchema(artifacts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertHealthEventSchema = createInsertSchema(healthEvents).omit({ id: true, createdAt: true });
