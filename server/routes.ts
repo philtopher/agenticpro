@@ -15,6 +15,7 @@ import { GovernorService } from "./services/governorService";
 import { DiagramService } from "./services/diagramService";
 import { FileSummarizerService } from "./services/fileSummarizerService";
 import { MessageRoutingService } from "./services/messageRoutingService";
+import { AgentAI } from "./services/agentAI";
 import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -338,6 +339,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error parsing messages:", error);
       res.status(500).json({ message: "Failed to parse messages" });
+    }
+  });
+
+  // Agent Chat API
+  app.post('/api/agents/:id/chat', async (req: any, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const { message, context } = req.body;
+      
+      const agent = await storage.getAgent(agentId);
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+
+      // Get agent AI service
+      const agentAI = new AgentAI(storage);
+      
+      // Generate AI response based on agent type and context
+      const response = await agentAI.generateChatResponse(agent, message, context);
+      
+      res.json({ response });
+    } catch (error) {
+      console.error("Error in agent chat:", error);
+      res.status(500).json({ message: "Failed to process chat message" });
     }
   });
 

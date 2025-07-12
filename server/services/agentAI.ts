@@ -1126,6 +1126,89 @@ Next Steps: Task reassigned with clear instructions and priority.`,
     };
   }
 
+  async generateChatResponse(agent: Agent, message: string, context: any): Promise<string> {
+    try {
+      // Use Azure OpenAI if available, otherwise simulate
+      if (azureOpenAIService.isConfigured()) {
+        const prompt = this.buildChatPrompt(agent, message, context);
+        const response = await azureOpenAIService.generateResponse(prompt, 500);
+        return response;
+      } else {
+        // Simulate AI response based on agent type
+        return this.simulateChatResponse(agent, message, context);
+      }
+    } catch (error) {
+      console.error("Error generating chat response:", error);
+      return this.simulateChatResponse(agent, message, context);
+    }
+  }
+
+  private buildChatPrompt(agent: Agent, message: string, context: any): string {
+    const agentPrompt = AGENT_PROMPTS[agent.type];
+    if (!agentPrompt) {
+      return `You are ${agent.name}, an AI assistant. Respond helpfully to: ${message}`;
+    }
+
+    return `You are ${agent.name}, a ${agentPrompt.role}.
+
+Your responsibilities include:
+${agentPrompt.responsibilities.map(r => `- ${r}`).join('\n')}
+
+Your collaboration style:
+${agentPrompt.collaboration.map(c => `- ${c}`).join('\n')}
+
+Previous conversation context:
+${context.previousMessages ? context.previousMessages.map((m: any) => `${m.role}: ${m.content}`).join('\n') : 'No previous context'}
+
+User message: ${message}
+
+Respond as ${agent.name} in a helpful, professional manner that reflects your role and expertise. Keep responses concise and actionable.`;
+  }
+
+  private simulateChatResponse(agent: Agent, message: string, context: any): string {
+    const agentPrompt = AGENT_PROMPTS[agent.type];
+    const responses = {
+      product_manager: [
+        "I can help you clarify requirements and define acceptance criteria. What specific aspect would you like to focus on?",
+        "Let me analyze this from a product perspective. I'll work with the team to ensure we meet user needs.",
+        "I'll coordinate with other agents to ensure this aligns with our product roadmap and user stories."
+      ],
+      business_analyst: [
+        "I can help break this down into detailed user stories and workflows. Let me analyze the requirements.",
+        "I'll create comprehensive documentation and identify any edge cases we need to consider.",
+        "Let me work with the team to ensure we have all the business logic properly defined."
+      ],
+      developer: [
+        "I can help implement this feature. Let me review the technical requirements and create the necessary code.",
+        "I'll work on the implementation and coordinate with the QA team for testing.",
+        "Let me break this down into development tasks and estimate the effort required."
+      ],
+      qa_engineer: [
+        "I can help create comprehensive test cases for this feature. Let me analyze the acceptance criteria.",
+        "I'll coordinate with the development team to ensure proper testing coverage.",
+        "Let me design test scenarios that cover all user workflows and edge cases."
+      ],
+      product_owner: [
+        "I'll review this from a business value perspective and ensure it aligns with our priorities.",
+        "Let me work with the team to validate this meets our business requirements.",
+        "I can help prioritize this in our backlog and ensure stakeholder alignment."
+      ],
+      engineering_lead: [
+        "I'll coordinate the technical implementation across the team and ensure code quality.",
+        "Let me review the technical architecture and coordinate with all development team members.",
+        "I can help optimize the development process and remove any technical blockers."
+      ]
+    };
+
+    const agentResponses = responses[agent.type as keyof typeof responses] || [
+      "I'm here to help! Let me work on this and coordinate with the team as needed.",
+      "I'll analyze this request and work with other agents to provide the best solution.",
+      "Let me handle this professionally and ensure we deliver quality results."
+    ];
+
+    return agentResponses[Math.floor(Math.random() * agentResponses.length)];
+  }
+
   private async simulateAdminGovernorResponse(task: Task, history: Communication[]): Promise<any> {
     return {
       response: `As Admin Governor, I've assessed the task "${task.title}" from a platform governance perspective. This task aligns with our organizational priorities and compliance requirements. I've reviewed resource allocation and confirmed this can proceed without conflicts. System metrics are healthy and agents are operating within normal parameters.`,

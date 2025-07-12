@@ -27,11 +27,7 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
 
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
-      return await apiRequest("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify(taskData),
-        headers: { "Content-Type": "application/json" },
-      });
+      return await apiRequest("POST", "/api/tasks", taskData);
     },
     onSuccess: () => {
       toast({
@@ -157,7 +153,7 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
                 <SelectContent>
                   {agents?.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id.toString()}>
-                      {agent.name}
+                      {agent.name} ({agent.type.replace(/_/g, ' ')})
                     </SelectItem>
                   ))}
                 </SelectContent>

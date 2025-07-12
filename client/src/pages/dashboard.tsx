@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
 import { TaskAssignmentModal } from "@/components/TaskAssignmentModal";
+import { AgentChatModal } from "@/components/AgentChatModal";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { WorkflowCard } from "@/components/WorkflowCard";
 import { CommunicationFeed } from "@/components/CommunicationFeed";
@@ -18,6 +19,8 @@ export default function Dashboard() {
   const { toast } = useToast();
   const { isConnected, lastMessage } = useWebSocket();
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<any>(null);
 
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["/api/metrics"],
@@ -173,6 +176,13 @@ export default function Dashboard() {
         isOpen={showTaskModal}
         onClose={() => setShowTaskModal(false)}
         agents={agents}
+      />
+
+      {/* Agent Chat Modal */}
+      <AgentChatModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        agent={selectedAgent}
       />
     </div>
   );
