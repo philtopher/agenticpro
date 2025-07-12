@@ -1,6 +1,7 @@
 import { Agent, Task, Communication, Artifact } from "@shared/schema";
 import { IStorage } from "../storage";
 import { EXTENDED_AGENT_PROMPTS, GLOBAL_PROMPTS } from "./agentPromptsExtended";
+import { azureOpenAIService } from "./azureOpenAI";
 
 export interface AgentPrompt {
   role: string;
@@ -768,9 +769,86 @@ export class AgentAI {
     shouldEscalate: boolean;
     escalationReason?: string;
   }> {
-    const prompt = AGENT_PROMPTS[agent.type];
+    const agentPrompt = EXTENDED_AGENT_PROMPTS[agent.type] || AGENT_PROMPTS[agent.type];
+    if (!agentPrompt) {
+      return {
+        response: "I need clarification on this task.",
+        shouldEscalate: true,
+        escalationReason: "Unknown agent type",
+        artifacts: []
+      };
+    }
+
+    // Build context for AI decision making
+    const context = `
+Agent: ${agent.name} (${agent.type})
+Task: ${task.title}
+Description: ${task.description}
+Priority: ${task.priority}
+Status: ${task.status}
+History: ${history.length} previous communications
+Recent Communications: ${history.slice(-3).map(c => c.content).join('; ')}
+Memory: ${memory.length} items
+`;
+
+    // Use the agent's system prompt with context
+    const fullPrompt = `${agentPrompt.systemPrompt}
+
+Current Context:
+${context}
+
+Based on your role and the task context, provide a detailed response about how you would handle this task. Include:
+1. Your analysis of the task
+2. Specific actions you would take
+3. Any artifacts you would create
+4. Next steps in the workflow
+
+Please provide a comprehensive response as this agent would.`;
     
-    // Simulate different responses based on agent type
+    try {
+      // Use Azure OpenAI if available, otherwise fall back to simulation
+      if (azureOpenAIService.isConfigured()) {
+        const aiResponse = await azureOpenAIService.generateResponse(fullPrompt, 1500);
+        return {
+          response: aiResponse,
+          nextAgent: this.getNextAgentType(agent.type),
+          artifacts: this.extractArtifactsFromResponse(aiResponse, agentPrompt.artifacts),
+          shouldEscalate: false
+        };
+      } else {
+        // Fallback to enhanced simulation
+        return this.getEnhancedSimulatedResponse(agent, task, history);
+      }
+    } catch (error) {
+      console.error('Error in AI decision making:', error);
+      return this.getEnhancedSimulatedResponse(agent, task, history);
+    }
+  }
+
+  private extractArtifactsFromResponse(response: string, expectedArtifacts: string[]): any[] {
+    // Extract potential artifacts mentioned in the AI response
+    const artifacts: any[] = [];
+    const lowerResponse = response.toLowerCase();
+    
+    expectedArtifacts.forEach(artifact => {
+      if (lowerResponse.includes(artifact.toLowerCase())) {
+        artifacts.push({
+          type: artifact,
+          content: `Generated ${artifact}`,
+          description: `AI-generated ${artifact} based on task analysis`
+        });
+      }
+    });
+    
+    return artifacts.length > 0 ? artifacts : [{
+      type: expectedArtifacts[0] || "Analysis",
+      content: "Task analysis completed",
+      description: "AI analysis of the given task"
+    }];
+  }
+
+  private getEnhancedSimulatedResponse(agent: Agent, task: Task, history: Communication[]): any {
+    // Enhanced simulation with more context awareness
     switch (agent.type) {
       case 'product_manager':
         return this.simulateProductManagerResponse(task, history);
@@ -787,8 +865,21 @@ export class AgentAI {
       case 'product_owner':
         return this.simulateProductOwnerResponse(task, history);
       
+      case 'engineering_manager':
       case 'engineering_lead':
         return this.simulateEngineeringLeadResponse(task, history);
+      
+      case 'solution_designer':
+        return this.simulateSolutionDesignerResponse(task, history);
+      
+      case 'solutions_architect':
+        return this.simulateSolutionsArchitectResponse(task, history);
+      
+      case 'devops_engineer':
+        return this.simulateDevOpsEngineerResponse(task, history);
+      
+      case 'admin_governor':
+        return this.simulateAdminGovernorResponse(task, history);
       
       default:
         return {
@@ -1000,5 +1091,41 @@ Next Steps: Task reassigned with clear instructions and priority.`,
     if (agent.status === 'unhealthy') return true;
     
     return false;
+  }
+
+  private async simulateSolutionDesignerResponse(task: Task, history: Communication[]): Promise<any> {
+    return {
+      response: `As Solution Designer, I've analyzed the task "${task.title}" and created initial wireframes and user flow diagrams. The design focuses on user experience and accessibility. I've considered responsive design principles and created mockups that align with our design system. The interface will be intuitive and user-friendly.`,
+      nextAgent: "solutions_architect",
+      artifacts: ["UI/UX wireframes", "Design mockups", "User flow diagrams"],
+      shouldEscalate: false
+    };
+  }
+
+  private async simulateSolutionsArchitectResponse(task: Task, history: Communication[]): Promise<any> {
+    return {
+      response: `As Solutions Architect, I've designed the technical architecture for "${task.title}". This includes data models, API specifications, and integration patterns. The architecture follows microservices principles and ensures scalability and maintainability. I've documented the technical blueprints and integration points.`,
+      nextAgent: "developer",
+      artifacts: ["Technical architecture", "Data models", "API specifications"],
+      shouldEscalate: false
+    };
+  }
+
+  private async simulateDevOpsEngineerResponse(task: Task, history: Communication[]): Promise<any> {
+    return {
+      response: `As DevOps Engineer, I've prepared the infrastructure and deployment pipeline for "${task.title}". This includes CI/CD setup, monitoring configurations, and infrastructure-as-code templates. The deployment strategy ensures zero-downtime releases and comprehensive monitoring.`,
+      nextAgent: "qa_engineer",
+      artifacts: ["CI/CD pipeline", "Infrastructure templates", "Monitoring setup"],
+      shouldEscalate: false
+    };
+  }
+
+  private async simulateAdminGovernorResponse(task: Task, history: Communication[]): Promise<any> {
+    return {
+      response: `As Admin Governor, I've assessed the task "${task.title}" from a platform governance perspective. This task aligns with our organizational priorities and compliance requirements. I've reviewed resource allocation and confirmed this can proceed without conflicts. System metrics are healthy and agents are operating within normal parameters.`,
+      nextAgent: null,
+      artifacts: ["Governance assessment", "Resource allocation", "System metrics"],
+      shouldEscalate: false
+    };
   }
 }

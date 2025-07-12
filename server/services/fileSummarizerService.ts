@@ -1,5 +1,6 @@
 import { IStorage } from "../storage";
 import { GLOBAL_PROMPTS } from "./agentPromptsExtended";
+import { azureOpenAIService } from "./azureOpenAI";
 
 export interface FileSummary {
   summary: string[];
@@ -12,14 +13,29 @@ export class FileSummarizerService {
 
   async summarizeFile(content: string, filename: string): Promise<FileSummary> {
     try {
-      // Simulate AI file summarization using the prompt from the specification
-      const analysis = await this.simulateFileSummarization(content, filename);
-      
-      return {
-        summary: analysis.summary || [],
-        actions: analysis.actions || [],
-        tags: analysis.tags || []
-      };
+      // Use Azure OpenAI if available, otherwise fall back to simulation
+      if (azureOpenAIService.isConfigured()) {
+        const prompt = `${GLOBAL_PROMPTS.summarizerPrompt}
+
+File: ${filename}
+Content:
+${content}`;
+        
+        const aiResponse = await azureOpenAIService.generateJSONResponse(prompt);
+        return {
+          summary: aiResponse.summary || [],
+          actions: aiResponse.actions || [],
+          tags: aiResponse.tags || []
+        };
+      } else {
+        // Fallback to simulation
+        const analysis = await this.simulateFileSummarization(content, filename);
+        return {
+          summary: analysis.summary || [],
+          actions: analysis.actions || [],
+          tags: analysis.tags || []
+        };
+      }
     } catch (error) {
       console.error("Error summarizing file:", error);
       return {
