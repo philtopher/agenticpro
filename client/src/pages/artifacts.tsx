@@ -93,8 +93,8 @@ export default function Artifacts() {
   const filteredArtifacts = artifacts?.filter(artifact => {
     const matchesSearch = artifact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          artifact.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = !filterType || artifact.type === filterType;
-    const matchesStatus = !filterStatus || artifact.status === filterStatus;
+    const matchesType = !filterType || filterType === "all" || artifact.type === filterType;
+    const matchesStatus = !filterStatus || filterStatus === "all" || artifact.status === filterStatus;
     
     return matchesSearch && matchesType && matchesStatus;
   }) || [];
@@ -139,7 +139,7 @@ export default function Artifacts() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All types</SelectItem>
+                  <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="code">Code</SelectItem>
                   <SelectItem value="specification">Specification</SelectItem>
                   <SelectItem value="test_case">Test Case</SelectItem>
@@ -155,7 +155,7 @@ export default function Artifacts() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All statuses</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="review">Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>

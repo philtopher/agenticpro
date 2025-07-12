@@ -129,13 +129,7 @@ export default function Chat() {
                 <SelectContent>
                   {agents.map((agent: any) => (
                     <SelectItem key={agent.id} value={agent.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <Bot className="h-4 w-4" />
-                        <span>{agent.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {agent.type.replace("_", " ")}
-                        </Badge>
-                      </div>
+                      {agent.name} - {agent.type.replace("_", " ")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -144,20 +138,15 @@ export default function Chat() {
 
             <div>
               <label className="text-sm font-medium mb-2 block">Related Task (Optional)</label>
-              <Select value={taskId?.toString() || ""} onValueChange={(value) => setTaskId(value ? parseInt(value) : null)}>
+              <Select value={taskId?.toString() || "none"} onValueChange={(value) => setTaskId(value === "none" ? null : parseInt(value))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Link to a task" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No task selected</SelectItem>
+                  <SelectItem value="none">No task selected</SelectItem>
                   {tasks.map((task: any) => (
                     <SelectItem key={task.id} value={task.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <span className="truncate">{task.title}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {task.status}
-                        </Badge>
-                      </div>
+                      {task.title} - {task.status}
                     </SelectItem>
                   ))}
                 </SelectContent>

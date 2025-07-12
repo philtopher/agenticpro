@@ -66,8 +66,8 @@ export function Sidebar({ agents, onNewTask }: SidebarProps) {
                 const isActive = location === item.path;
                 return (
                   <Link key={item.path} href={item.path}>
-                    <a
-                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    <div
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
                         isActive
                           ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                           : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -75,7 +75,7 @@ export function Sidebar({ agents, onNewTask }: SidebarProps) {
                     >
                       <Icon className="h-4 w-4 mr-3" />
                       {item.label}
-                    </a>
+                    </div>
                   </Link>
                 );
               })}
