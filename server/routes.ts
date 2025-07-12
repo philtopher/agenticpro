@@ -18,28 +18,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const communicationService = new CommunicationService(storage);
   const artifactService = new ArtifactService(storage);
   const healthService = new HealthService(storage);
-  const emailService = new EmailService();
-
-  // Auth middleware
-  await setupAuth(app);
+  const emailService = new EmailService(storage);
 
   // Initialize agents on startup
   await agentService.initializeAgents();
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
   // Agent routes
-  app.get('/api/agents', isAuthenticated, async (req, res) => {
+  app.get('/api/agents', async (req, res) => {
     try {
       const agents = await storage.getAgents();
       res.json(agents);
@@ -49,7 +34,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/agents/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/agents/:id', async (req, res) => {
     try {
       const agent = await storage.getAgent(parseInt(req.params.id));
       if (!agent) {
@@ -63,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Task routes
-  app.get('/api/tasks', isAuthenticated, async (req, res) => {
+  app.get('/api/tasks', async (req, res) => {
     try {
       const tasks = await storage.getTasks();
       res.json(tasks);
@@ -73,12 +58,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/tasks', isAuthenticated, async (req: any, res) => {
+  app.post('/api/tasks', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
       const taskData = insertTaskSchema.parse({
         ...req.body,
-        createdById: userId,
+        createdById: "system", // Default to system user when no auth
       });
       
       const task = await taskService.createTask(taskData);
@@ -89,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/tasks/:id', isAuthenticated, async (req, res) => {
+  app.patch('/api/tasks/:id', async (req, res) => {
     try {
       const taskId = parseInt(req.params.id);
       const updates = req.body;
@@ -102,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/tasks/:id/assign', isAuthenticated, async (req, res) => {
+  app.post('/api/tasks/:id/assign', async (req, res) => {
     try {
       const taskId = parseInt(req.params.id);
       const { agentId } = req.body;
@@ -116,7 +100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Communication routes
-  app.get('/api/communications', isAuthenticated, async (req, res) => {
+  app.get('/api/communications', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const communications = await storage.getRecentCommunications(limit);
@@ -127,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/communications', isAuthenticated, async (req, res) => {
+  app.post('/api/communications', async (req, res) => {
     try {
       const communicationData = insertCommunicationSchema.parse(req.body);
       const communication = await communicationService.createCommunication(communicationData);
@@ -139,7 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Artifact routes
-  app.get('/api/artifacts', isAuthenticated, async (req, res) => {
+  app.get('/api/artifacts', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const artifacts = await storage.getRecentArtifacts(limit);
@@ -150,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/artifacts', isAuthenticated, async (req, res) => {
+  app.post('/api/artifacts', async (req, res) => {
     try {
       const artifactData = insertArtifactSchema.parse(req.body);
       const artifact = await artifactService.createArtifact(artifactData);
@@ -162,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Health monitoring routes
-  app.get('/api/health/events', isAuthenticated, async (req, res) => {
+  app.get('/api/health/events', async (req, res) => {
     try {
       const events = await storage.getUnresolvedHealthEvents();
       res.json(events);
@@ -173,13 +157,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard metrics
-  app.get('/api/metrics', isAuthenticated, async (req, res) => {
+  app.get('/api/metrics', async (req, res) => {
     try {
       const metrics = await agentService.getSystemMetrics();
       res.json(metrics);
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ message: "Failed to fetch metrics" });
+    }
+  });
+
+  // Agent communication endpoints
+  app.post('/api/agents/:agentId/communicate', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.agentId);
+      const { message, taskId, messageType } = req.body;
+      
+      const communicationData = {
+        fromAgentId: null, // User message
+        toAgentId: agentId,
+        taskId: taskId || null,
+        message: message,
+        messageType: messageType || 'user_message',
+        metadata: {
+          timestamp: new Date().toISOString(),
+          userInitiated: true,
+        },
+      };
+      
+      const communication = await communicationService.createCommunication(communicationData);
+      
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'communication_created',
+            data: communication
+          }));
+        }
+      });
+      
+      res.status(201).json(communication);
+    } catch (error) {
+      console.error("Error creating communication:", error);
+      res.status(500).json({ message: "Failed to create communication" });
+    }
+  });
+
+  // Test agent workflow functionality
+  app.post('/api/test/workflow', async (req, res) => {
+    try {
+      const { projectType, methodology } = req.body;
+      
+      // Create a test project
+      const projectData = {
+        title: `Test ${projectType} Project`,
+        description: `Testing multi-agent workflow for ${projectType} development using ${methodology} methodology`,
+        status: "pending",
+        priority: "medium",
+        assignedToId: null,
+        workflow: {
+          type: methodology,
+          currentStage: "requirements",
+          stages: methodology === "agile" 
+            ? ["requirements", "planning", "development", "testing", "review", "deployment"]
+            : methodology === "kanban"
+            ? ["backlog", "to_do", "in_progress", "testing", "done"]
+            : ["requirements", "design", "development", "testing", "deployment"],
+          projectType: projectType,
+        },
+        requirements: [`Test requirement for ${projectType}`],
+        acceptanceCriteria: [`Test acceptance criteria for ${projectType}`],
+        estimatedHours: 40,
+        tags: [projectType, methodology, "test"],
+      };
+      
+      const project = await taskService.createTask(projectData);
+      
+      // Trigger agent workflow
+      await taskService.progressWorkflow(project);
+      
+      res.json({ project, message: "Test workflow initiated" });
+    } catch (error) {
+      console.error("Error testing workflow:", error);
+      res.status(500).json({ message: "Failed to test workflow" });
     }
   });
 

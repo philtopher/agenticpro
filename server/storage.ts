@@ -141,12 +141,12 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasks(): Promise<Task[]> {
-    return await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    return await db.select().from(tasks).orderBy(desc(tasks.createdAt)) as Task[];
   }
 
   async getTask(id: number): Promise<Task | undefined> {
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
-    return task;
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id)) as Task[];
+    return task || undefined;
   }
 
   async getTasksByAgent(agentId: number): Promise<Task[]> {
@@ -154,7 +154,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(tasks)
       .where(eq(tasks.assignedToId, agentId))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt)) as Task[];
   }
 
   async getTasksByStatus(status: string): Promise<Task[]> {
@@ -162,11 +162,11 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(tasks)
       .where(eq(tasks.status, status))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt)) as Task[];
   }
 
   async createTask(task: InsertTask): Promise<Task> {
-    const [newTask] = await db.insert(tasks).values(task).returning();
+    const [newTask] = await db.insert(tasks).values(task).returning() as Task[];
     return newTask;
   }
 
@@ -175,7 +175,7 @@ export class DatabaseStorage implements IStorage {
       .update(tasks)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(tasks.id, id))
-      .returning();
+      .returning() as Task[];
     return updatedTask;
   }
 

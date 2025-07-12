@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { TaskAssignmentModal } from "@/components/TaskAssignmentModal";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
@@ -14,43 +12,16 @@ import { AgentPerformanceCard } from "@/components/AgentPerformanceCard";
 import { ArtifactCard } from "@/components/ArtifactCard";
 import { TopNavigation } from "@/components/TopNavigation";
 import { Sidebar } from "@/components/Sidebar";
+import { TestingPanel } from "@/components/TestingPanel";
 
 export default function Dashboard() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
   const { isConnected, lastMessage } = useWebSocket();
   const [showTaskModal, setShowTaskModal] = useState(false);
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
 
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["/api/metrics"],
     retry: false,
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-      }
-    },
   });
 
   const { data: agents } = useQuery({
@@ -73,7 +44,7 @@ export default function Dashboard() {
     retry: false,
   });
 
-  if (isLoading || metricsLoading) {
+  if (metricsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -186,10 +157,13 @@ export default function Dashboard() {
             </div>
 
             {/* Agent Performance & Artifacts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <AgentPerformanceCard agents={agents} />
               <ArtifactCard artifacts={artifacts} agents={agents} />
             </div>
+
+            {/* Testing Panel */}
+            <TestingPanel />
           </div>
         </div>
       </div>

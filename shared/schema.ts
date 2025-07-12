@@ -60,7 +60,7 @@ export const tasks = pgTable("tasks", {
   priority: varchar("priority").notNull().default("medium"), // 'low', 'medium', 'high', 'urgent'
   assignedToId: integer("assigned_to_id").references(() => agents.id),
   createdById: varchar("created_by_id").references(() => users.id),
-  parentTaskId: integer("parent_task_id").references(() => tasks.id),
+  parentTaskId: integer("parent_task_id"),
   workflow: jsonb("workflow").notNull(), // workflow state and progression
   requirements: jsonb("requirements"),
   acceptanceCriteria: jsonb("acceptance_criteria"),
