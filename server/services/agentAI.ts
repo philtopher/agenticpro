@@ -713,7 +713,7 @@ export class AgentAI {
     shouldEscalate: boolean;
     escalationReason?: string;
   }> {
-    const prompt = AGENT_PROMPTS[agent.type];
+    const prompt = AGENT_PROMPTS[agent.type] || EXTENDED_AGENT_PROMPTS[agent.type];
     if (!prompt) {
       throw new Error(`No prompt found for agent type: ${agent.type}`);
     }

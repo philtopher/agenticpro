@@ -153,7 +153,7 @@ export function TaskAssignmentModal({ isOpen, onClose, agents }: TaskAssignmentM
                 <SelectContent>
                   {agents?.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id.toString()}>
-                      {agent.name} ({agent.type.replace(/_/g, ' ')})
+                      {agent.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

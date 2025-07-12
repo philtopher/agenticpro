@@ -44,6 +44,8 @@ AgentFlow is a comprehensive autonomous AI-powered software development lifecycl
 - **Communication Tracking**: ✅ CONFIRMED - Complete visibility into all agent interactions per task
 - **User Notifications**: ✅ CONFIRMED - "Get back to me" instructions trigger automatic user notifications
 - **End-to-End Workflow**: ✅ CONFIRMED - Tasks flow through Business Analyst → Product Owner → Product Manager → User notification automatically
+- **Agent Dropdown**: ✅ CONFIRMED - All 10 agents properly named (Sam, Bailey, Dex, Tess, Ollie, Sienna, Aria, Nova, Emi, Zara) with correct ID mapping
+- **Task Assignment**: ✅ CONFIRMED - Agent assignment correctly maps to database IDs for immediate autonomous execution
 
 ✅ **USER INTERFACE ENHANCEMENTS**
 - **Agent Dashboard**: Clickable agents with detailed status and health scores
