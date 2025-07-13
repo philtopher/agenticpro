@@ -1,7 +1,11 @@
-import { IStorage, Agent, InsertAgent } from "@shared/schema";
+import { Agent, InsertAgent } from "@shared/schema";
+import { IStorage } from "../storage";
 
 export class AgentService {
-  constructor(private storage: IStorage) {}
+  public storage: IStorage;
+  constructor(storage: IStorage) {
+    this.storage = storage;
+  }
 
   async initializeAgents(): Promise<void> {
     const existingAgents = await this.storage.getAgents();
@@ -176,5 +180,14 @@ export class AgentService {
       status: "escalated",
       workflow: { escalated: true, reason }
     });
+  }
+
+  async getAllAgents() {
+    return this.storage.getAgents();
+  }
+
+  async findAgentByType(type: string) {
+    const agents = await this.getAllAgents();
+    return agents.find((a: any) => a.type === type && a.status === 'active');
   }
 }

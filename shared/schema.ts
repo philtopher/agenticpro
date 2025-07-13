@@ -123,6 +123,15 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Agent persistent memory table
+export const agentMemories = pgTable("agent_memories", {
+  id: serial("id").primaryKey(),
+  agentId: integer("agent_id").references(() => agents.id),
+  memory: text("memory").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const agentRelations = relations(agents, ({ many }) => ({
   assignedTasks: many(tasks),
@@ -130,6 +139,7 @@ export const agentRelations = relations(agents, ({ many }) => ({
   receivedCommunications: many(communications, { relationName: "receivedComms" }),
   createdArtifacts: many(artifacts),
   healthEvents: many(healthEvents),
+  memories: many(agentMemories),
 }));
 
 export const taskRelations = relations(tasks, ({ one, many }) => ({
@@ -160,6 +170,10 @@ export const notificationRelations = relations(notifications, ({ one }) => ({
   recipient: one(users, { fields: [notifications.recipientId], references: [users.id] }),
 }));
 
+export const memoryRelations = relations(agentMemories, ({ one }) => ({
+  agent: one(agents, { fields: [agentMemories.agentId], references: [agents.id] }),
+}));
+
 // Insert schemas
 export const insertAgentSchema = createInsertSchema(agents).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
@@ -172,6 +186,7 @@ export const insertCommunicationSchema = createInsertSchema(communications).omit
 export const insertArtifactSchema = createInsertSchema(artifacts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertHealthEventSchema = createInsertSchema(healthEvents).omit({ id: true, createdAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertMemorySchema = createInsertSchema(agentMemories).omit({ id: true, createdAt: true });
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;
@@ -188,3 +203,5 @@ export type HealthEvent = typeof healthEvents.$inferSelect;
 export type InsertHealthEvent = z.infer<typeof insertHealthEventSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Memory = typeof agentMemories.$inferSelect;
+export type InsertMemory = z.infer<typeof insertMemorySchema>;

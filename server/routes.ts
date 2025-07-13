@@ -1,27 +1,63 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { AgentService } from "./services/agentService";
-import { TaskService } from "./services/taskService";
-import { CommunicationService } from "./services/communicationService";
-import { ArtifactService } from "./services/artifactService";
-import { HealthService } from "./services/healthService";
-import { EmailService } from "./services/emailService";
-import { PlannerService } from "./services/plannerService";
-import { ReminderService } from "./services/reminderService";
-import { GovernorService } from "./services/governorService";
-import { DiagramService } from "./services/diagramService";
-import { FileSummarizerService } from "./services/fileSummarizerService";
-import { MessageRoutingService } from "./services/messageRoutingService";
-import { AgentAI } from "./services/agentAI";
-import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from "@shared/schema";
+import { Express } from 'express';
+import { Server, createServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import * as storage from './storage';
+import { AgentService } from './services/agentService';
+import { TaskService } from './services/taskService';
+import { CommunicationService } from './services/communicationService';
+import { ArtifactService } from './services/artifactService';
+import { HealthService } from './services/healthService';
+import { EmailService } from './services/emailService';
+import { PlannerService } from './services/plannerService';
+import { ReminderService } from './services/reminderService';
+import { GovernorService } from './services/governorService';
+import { DiagramService } from './services/diagramService';
+import { FileSummarizerService } from './services/fileSummarizerService';
+import { MessageRoutingService } from './services/messageRoutingService';
+import { AgentAI } from './services/agentAI';
+import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from '../shared/schema';
+
+// --- Utility: Autonomous goal generation for agents ---
+function generateAgentGoal(agentId: number, memoryLog: any[], systemTasks: any[]): { title: string, description: string, tags: string[] } {
+  // Use memory and system state to propose a meaningful goal
+  // Example: If agent recently failed a task, propose a goal to improve; else, propose a new feature or improvement
+  const lastLearning = memoryLog.slice().reverse().find((e: any) => e.type === 'learning');
+  let title = '';
+  let description = '';
+  let tags: string[] = [];
+  if (lastLearning && lastLearning.content && lastLearning.content.toLowerCase().includes('fail')) {
+    title = `Improve on failed task`;
+    description = `Agent ${agentId} sets a goal to address recent failure: ${lastLearning.content}`;
+    tags = ['improvement', 'learning'];
+  } else {
+    // Propose a new feature or improvement based on open tasks
+    const openTasks = systemTasks.filter((t: any) => t.status === 'pending');
+    if (openTasks.length > 0) {
+      title = `Support task: ${openTasks[0].title}`;
+      description = `Agent ${agentId} sets a goal to support or accelerate task: ${openTasks[0].title}`;
+      tags = ['support', 'collaboration'];
+    } else {
+      title = `Propose new feature`;
+      description = `Agent ${agentId} sets a goal to propose a new feature for the project.`;
+      tags = ['feature', 'initiative'];
+    }
+  }
+  return { title, description, tags };
+}
+
+// --- Utility: Support for parallel/nonlinear workflows (branch/merge/conditional) ---
+function getParallelTasksForAgent(agentId: number, allTasks: any[]) {
+  // Return tasks assigned to this agent that are not blocked and not completed
+  return allTasks.filter(t => t.assignedToId === agentId && t.status === 'pending' && (!t.blockedBy || t.blockedBy.length === 0));
+}
+
+// In-memory store for task progress (could be replaced with Redis/db for scale)
+const taskProgressMap = new Map<number, any>();
 
 export async function registerRoutes(
-  app: Express, 
-  workflowEngine?: any, 
-  projectService?: any, 
+  app: Express,
+  workflowEngine?: any,
+  projectService?: any,
   versionControlService?: any
 ): Promise<Server> {
   // Initialize services
@@ -41,9 +77,277 @@ export async function registerRoutes(
   // Initialize agents on startup
   await agentService.initializeAgents();
 
-  // AuthSetup will be called after routes are defined
+  // --- Agent utility functions that require agentMemoryService ---
+  // --- Utility: Find similar and contextually relevant past tasks for an agent (enhanced memory-driven reasoning) ---
+  function findRelevantTasksInMemory(agentId: number, currentTask: any, memoryLog: any[], maxResults = 5) {
+    if (!currentTask || !currentTask.title) return [];
+    // Use keywords from title and tags
+    const keywords: string[] = [
+      ...currentTask.title.toLowerCase().split(/\W+/).filter(Boolean),
+      ...(currentTask.tags || []).map((t: string) => t.toLowerCase())
+    ];
+    // Find similar actions and also relevant strategies/learning
+    const relevant = memoryLog.filter((entry: any) => {
+      if (!entry.content) return false;
+      const content = (entry.content || '').toLowerCase();
+      // Match on keywords or if entry is a strategy/learning for similar context
+      if (entry.type === 'action') {
+        return keywords.some((k: string) => content.includes(k));
+      }
+      if (entry.type === 'strategy' || entry.type === 'learning') {
+        return keywords.some((k: string) => content.includes(k));
+      }
+      return false;
+    });
+    // Sort by recency
+    relevant.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    // Generalize: if multiple strategies/learning found, merge their details
+    const strategies = relevant.filter((e: any) => e.type === 'strategy').map((e: any) => e.details || {});
+    let generalizedStrategy = {};
+    if (strategies.length > 0) {
+      // Simple merge: average riskTolerance, collect lastOutcomes
+      const riskVals = strategies.map((s: any) => s.riskTolerance).filter((v: any) => typeof v === 'number');
+      if (riskVals.length > 0) {
+        generalizedStrategy['riskTolerance'] = riskVals.reduce((a: number, b: number) => a + b, 0) / riskVals.length;
+      }
+      generalizedStrategy['lastOutcomes'] = strategies.map((s: any) => s.lastOutcome).filter(Boolean);
+    }
+    return { relevant: relevant.slice(0, maxResults), generalizedStrategy };
+  }
 
-  // Agent routes
+  // --- Utility: Agent learning from outcomes (learning/adaptation, with strategy update) ---
+  async function agentLearnFromOutcome(agentId: number, taskId: number, outcome: string, details: any = {}) {
+    if (agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
+      await agentMemoryService.logAgentMemory(agentId, {
+        type: 'learning',
+        content: `Learned from task ${taskId}: ${outcome}`,
+        details,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    // --- Simple strategy update: store/update a 'strategy' in agent memory ---
+    if (agentMemoryService && typeof agentMemoryService.getAgentMemory === 'function') {
+      const mem = await agentMemoryService.getAgentMemory(agentId);
+      // Find last strategy
+      let lastStrategy = mem.slice().reverse().find((e: any) => e.type === 'strategy');
+      let newStrategy = { ...((lastStrategy && lastStrategy.details) || {}), lastOutcome: outcome };
+      // Example: if outcome is 'success', reinforce; if 'failure', try a new approach
+      if (outcome.toLowerCase().includes('fail')) {
+        newStrategy.riskTolerance = (newStrategy.riskTolerance || 0) - 1;
+      } else if (outcome.toLowerCase().includes('success')) {
+        newStrategy.riskTolerance = (newStrategy.riskTolerance || 0) + 1;
+      }
+      await agentMemoryService.logAgentMemory(agentId, {
+        type: 'strategy',
+        content: `Strategy updated after task ${taskId}: ${JSON.stringify(newStrategy)}`,
+        details: newStrategy,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return true;
+  }
+
+  // --- Utility: Agent personality/specialization (dynamic, evolving) ---
+  async function getAgentPersonality(agentId: number) {
+    // Start with static base
+    const base = {
+      1: { traits: ['visionary', 'strategic'], expertise: ['product', 'requirements'] },
+      2: { traits: ['analytical', 'detail-oriented'], expertise: ['analysis', 'user stories'] },
+      3: { traits: ['innovative', 'pragmatic'], expertise: ['development', 'coding'] },
+      4: { traits: ['meticulous', 'skeptical'], expertise: ['testing', 'QA'] },
+      5: { traits: ['decisive', 'customer-focused'], expertise: ['ownership', 'prioritization'] },
+      6: { traits: ['creative', 'systematic'], expertise: ['design', 'UX'] },
+      7: { traits: ['architectural', 'holistic'], expertise: ['architecture', 'integration'] },
+      8: { traits: ['automation', 'resilient'], expertise: ['devops', 'infrastructure'] },
+      9: { traits: ['leadership', 'adaptive'], expertise: ['management', 'tech lead'] },
+      10: { traits: ['governance', 'proactive'], expertise: ['admin', 'oversight'] },
+    };
+    let personality = { ...(base[agentId as keyof typeof base] || { traits: [], expertise: [] }) };
+    // Evolve based on memory (recent learning/strategy)
+    if (agentMemoryService && typeof agentMemoryService.getAgentMemory === 'function') {
+      const mem = await agentMemoryService.getAgentMemory(agentId);
+      // If agent has succeeded at a certain tag/area, add to expertise
+      const learnings = mem.filter((e: any) => e.type === 'learning' && e.details && e.details.area && e.content && e.content.toLowerCase().includes('success'));
+      for (const l of learnings) {
+        if (l.details.area && !personality.expertise.includes(l.details.area)) {
+          personality.expertise.push(l.details.area);
+        }
+      }
+      // If agent has failed repeatedly in an area, reduce confidence (remove from expertise)
+      const failures = mem.filter((e: any) => e.type === 'learning' && e.details && e.details.area && e.content && e.content.toLowerCase().includes('fail'));
+      for (const f of failures) {
+        if (f.details.area && personality.expertise.includes(f.details.area)) {
+          // Remove if failed more than succeeded
+          const failCount = failures.filter((x: any) => x.details.area === f.details.area).length;
+          const successCount = learnings.filter((x: any) => x.details.area === f.details.area).length;
+          if (failCount > successCount) {
+            personality.expertise = personality.expertise.filter((x: string) => x !== f.details.area);
+          }
+        }
+      }
+    }
+    return personality;
+  }
+
+  /**
+   * Robust error detection, escalation, and adaptive recovery for agents and tasks.
+   * - Detects error/stuck state, attempts recovery, escalates if needed, and adapts agent strategy.
+   * - Logs all steps for explainability.
+   */
+  async function recoverAgentOrTask(agentId: number, taskId: number) {
+    let task = await storage.getTask(taskId);
+    if (!task) return false;
+    let recoveryLog = [];
+    // 1. Detect error/stuck state
+    if (task.status !== 'error' && task.status !== 'stuck') {
+      recoveryLog.push('No error/stuck state detected. No recovery needed.');
+      return true;
+    }
+    // 2. Attempt simple retry (reset to pending)
+    await storage.updateTask(taskId, { status: 'pending' });
+    recoveryLog.push('Task status reset to pending for retry.');
+    // 3. Log recovery attempt in agent memory
+    if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
+      await agentMemoryService.logAgentMemory(agentId, {
+        type: 'event',
+        content: `Recovery triggered for task ${taskId}: status reset to pending`,
+        details: { recoveryLog },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    // 4. Escalate if repeated failures (count in memory)
+    let mem = [];
+    if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.getAgentMemory === 'function') {
+      mem = await agentMemoryService.getAgentMemory(agentId);
+    }
+    const failEvents = mem.filter((e: any) => e.type === 'event' && e.content && e.content.includes(`Recovery triggered for task ${taskId}`));
+    if (failEvents.length > 2) {
+      await storage.updateTask(taskId, { status: 'escalated' });
+      recoveryLog.push('Task escalated after repeated recovery failures.');
+      if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
+        await agentMemoryService.logAgentMemory(agentId, {
+          type: 'event',
+          content: `Task ${taskId} escalated after repeated recovery failures`,
+          details: { recoveryLog },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      return false;
+    }
+    // 5. Adapt agent strategy after recovery attempt
+    if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
+      await agentMemoryService.logAgentMemory(agentId, {
+        type: 'learning',
+        content: `Agent adapted after recovery for task ${taskId}`,
+        details: { recoveryLog },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return true;
+  }
+
+  // --- Utility: Negotiation/consensus (basic protocol) ---
+  async function negotiateTaskAssignment(agentIds: number[], taskId: number) {
+    // Each agent "votes" for itself or another agent based on workload and recent success
+    let votes: Record<number, number> = {};
+    for (const id of agentIds) {
+      votes[id] = 0;
+    }
+    for (const id of agentIds) {
+      let mem = [];
+      if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.getAgentMemory === 'function') {
+        mem = await agentMemoryService.getAgentMemory(id);
+      }
+      // Prefer agents with fewer actions on this task and more recent success
+      const actions = mem.filter((e: any) => e.type === 'action' && e.content && e.content.includes(`task ${taskId}`));
+      const lastSuccess = mem.slice().reverse().find((e: any) => e.type === 'learning' && e.content && e.content.toLowerCase().includes('success'));
+      let score = 0;
+      score -= actions.length;
+      if (lastSuccess) score += 2;
+      votes[id] += score;
+    }
+    // Assign to agent with highest votes (consensus)
+    let selectedAgent = agentIds[0];
+    let maxVotes = votes[selectedAgent];
+    for (const id of agentIds) {
+      if (votes[id] > maxVotes) {
+        maxVotes = votes[id];
+        selectedAgent = id;
+      }
+    }
+    await storage.assignTask(taskId, selectedAgent);
+    // Log negotiation result
+    if (typeof agentMemoryService !== 'undefined' && agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
+      await agentMemoryService.logAgentMemory(selectedAgent, {
+        type: 'event',
+        content: `Negotiation consensus: assigned to agent ${selectedAgent} for task ${taskId}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return selectedAgent;
+  }
+
+  // --- END agent utility functions ---
+
+  // --- API: Get similar past tasks for an agent (for adaptive planning/explainability) ---
+  app.get('/api/agents/:id/similar-tasks/:taskId', async (req: any, res: any) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const taskId = parseInt(req.params.taskId);
+      if (isNaN(agentId) || isNaN(taskId)) {
+        return res.status(400).json({ message: "Invalid agentId or taskId" });
+      }
+      const memoryLog = await agentMemoryService.getAgentMemory(agentId);
+      const currentTask = await storage.getTask(taskId);
+      if (!currentTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      const similar = findRelevantTasksInMemory(agentId, currentTask, memoryLog);
+      res.json({ similar });
+    } catch (error) {
+      console.error("Error fetching similar tasks from memory:", error);
+      res.status(500).json({ message: "Failed to fetch similar tasks from memory" });
+    }
+  });
+
+  app.post('/api/agents/:id/propose-task', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const { title, description, tags, priority } = req.body;
+      if (!title || !description) {
+        return res.status(400).json({ message: "Title and description are required" });
+      }
+      // Agent proposes a new task
+      const taskData = {
+        title,
+        description,
+        status: "pending",
+        assignedToId: null,
+        createdById: agentId ? String(agentId) : null,
+        tags: tags || [],
+        priority: priority || "medium",
+        workflow: {
+          stage: "requirements",
+          history: [],
+          nextAgent: "product_manager"
+        }
+      };
+      const newTask = await taskService.createTask(taskData);
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'task_created',
+            data: newTask
+          }));
+        }
+      });
+      res.status(201).json(newTask);
+    } catch (error) {
+      console.error("Error in agent-initiated task creation:", error);
+      res.status(500).json({ message: "Failed to create agent-initiated task" });
+    }
+  });
   app.get('/api/agents', async (req, res) => {
     try {
       const agents = await storage.getAgents();
@@ -407,7 +711,7 @@ export async function registerRoutes(
   });
 
   // Agent Chat API
-  app.post('/api/agents/:id/chat', async (req: any, res) => {
+  app.post('/api/agents/:id/chat', async (req: any, res: any) => {
     try {
       const agentId = parseInt(req.params.id);
       const { message, context } = req.body;
@@ -660,46 +964,6 @@ export async function registerRoutes(
       const status = await workflowEngine.getWorkflowStatus();
       res.json(status);
     } catch (error) {
-      console.error("Error fetching workflow status:", error);
-      res.status(500).json({ message: "Failed to fetch workflow status" });
-    }
-  });
-
-  // Test agent workflow functionality
-  app.post('/api/test/workflow', async (req, res) => {
-    try {
-      const { projectType, methodology } = req.body;
-      
-      // Create a test project
-      const projectData = {
-        title: `Test ${projectType} Project`,
-        description: `Testing multi-agent workflow for ${projectType} development using ${methodology} methodology`,
-        status: "pending",
-        priority: "medium",
-        assignedToId: null,
-        workflow: {
-          type: methodology,
-          currentStage: "requirements",
-          stages: methodology === "agile" 
-            ? ["requirements", "planning", "development", "testing", "review", "deployment"]
-            : methodology === "kanban"
-            ? ["backlog", "to_do", "in_progress", "testing", "done"]
-            : ["requirements", "design", "development", "testing", "deployment"],
-          projectType: projectType,
-        },
-        requirements: [`Test requirement for ${projectType}`],
-        acceptanceCriteria: [`Test acceptance criteria for ${projectType}`],
-        estimatedHours: 40,
-        tags: [projectType, methodology, "test"],
-      };
-      
-      const project = await taskService.createTask(projectData);
-      
-      // Trigger agent workflow
-      await taskService.startAutomaticTaskProcessing(project.id);
-      
-      res.json({ project, message: "Test workflow initiated" });
-    } catch (error) {
       console.error("Error testing workflow:", error);
       res.status(500).json({ message: "Failed to test workflow" });
     }
@@ -756,6 +1020,262 @@ export async function registerRoutes(
   
   governorService.startGovernorService();
   console.log("Governor service started");
+
+
+  // --- Start agent daemons (autonomous agents) ---
+  // --- Zara proactive governance: monitor agents and intervene if needed ---
+  setInterval(async () => {
+    try {
+      // Example: Zara checks for stuck or failed agents/tasks
+      const allTasks = await storage.getTasks();
+      const stuckTasks = allTasks.filter((t: any) => t.status === 'stuck' || t.status === 'error');
+      for (const task of stuckTasks) {
+        // Zara reassigns or escalates the task
+        if (typeof governorService.handleStuckTask === 'function') {
+          await governorService.handleStuckTask(task);
+        } else {
+          // Fallback: mark as escalated and log
+          await storage.updateTask(task.id, { status: 'escalated' });
+          console.log(`Zara escalated task ${task.id}`);
+        }
+      }
+// --- GovernorService: add stub for handleStuckTask if missing ---
+if (typeof (governorService as any).handleStuckTask !== 'function') {
+  (governorService as any).handleStuckTask = async function(task: any) {
+    // Default stub: just mark as escalated
+    await storage.updateTask(task.id, { status: 'escalated' });
+    console.log(`[GovernorService] Escalated stuck task ${task.id}`);
+  };
+}
+    } catch (err) {
+      console.error("Zara proactive governance error:", err);
+    }
+  }, 20000); // Every 20s
+  // The agent workflow can be driven in two ways:
+  // 1. Default hardcoded agent handoff sequence (Sam → Bailey → Dex → Tess → Ollie → Sienna → Aria → Nova → Emi → Zara):
+  //    Each agent is responsible for a specific stage of the software development lifecycle and, upon completing their stage, hands off to the next agent by sending an agent-to-agent message and updating the task's workflow stage.
+  // 2. Dynamic, document-driven workflow: The agent handoff sequence and logic can be parsed from an external project instruction document (see attached_assets/ for examples).
+  //    If a project/task specifies a workflow document, agents will parse and follow the agent sequence and rules defined in that document, enabling explainable, dynamic, and externally-guided agent collaboration for software development.
+  //
+  // NOTE: Each agent daemon supports both default and document-driven workflow handoff. This enables the system to adapt to custom or evolving workflows specified by project stakeholders, or to use the default sequence if no document is provided.
+
+  const { AgentMemoryService } = require("./services/agentMemoryService");
+  const agentMemoryService = new AgentMemoryService(storage);
+  const { BaileyAgentDaemon } = require("./agentDaemons/BaileyAgentDaemon");
+  const { DexAgentDaemon } = require("./agentDaemons/DexAgentDaemon");
+  const { TessAgentDaemon } = require("./agentDaemons/TessAgentDaemon");
+  const { OllieAgentDaemon } = require("./agentDaemons/OllieAgentDaemon");
+  const { SiennaAgentDaemon } = require("./agentDaemons/SiennaAgentDaemon");
+  const { AriaAgentDaemon } = require("./agentDaemons/AriaAgentDaemon");
+  const { NovaAgentDaemon } = require("./agentDaemons/NovaAgentDaemon");
+  const { EmiAgentDaemon } = require("./agentDaemons/EmiAgentDaemon");
+  const { ZaraAgentDaemon } = require("./agentDaemons/ZaraAgentDaemon");
+  const { SamAgentDaemon } = require("./agentDaemons/SamAgentDaemon");
+
+  // Instantiate all agents
+  const samAgent = new SamAgentDaemon({ id: 1, name: "Sam", role: "Sr. Product Manager", intervalMs: 8000 }, taskService, agentMemoryService);
+  const baileyAgent = new BaileyAgentDaemon({ id: 2, name: "Bailey", role: "Senior Business Analyst", intervalMs: 9000 }, taskService, agentMemoryService, communicationService);
+  const dexAgent = new DexAgentDaemon({ id: 3, name: "Dex", role: "Senior Developer", intervalMs: 10000 }, taskService, agentMemoryService, communicationService);
+  const tessAgent = new TessAgentDaemon({ id: 4, name: "Tess", role: "Senior QA/Test Engineer", intervalMs: 11000 }, taskService, agentMemoryService, communicationService);
+  const ollieAgent = new OllieAgentDaemon({ id: 5, name: "Ollie", role: "Product Owner", intervalMs: 12000 }, taskService, agentMemoryService, communicationService);
+  const siennaAgent = new SiennaAgentDaemon({ id: 6, name: "Sienna", role: "Senior Solution Designer", intervalMs: 13000 }, taskService, agentMemoryService, communicationService);
+  const ariaAgent = new AriaAgentDaemon({ id: 7, name: "Aria", role: "Senior Solutions Architect", intervalMs: 14000 }, taskService, agentMemoryService, communicationService);
+  const novaAgent = new NovaAgentDaemon({ id: 8, name: "Nova", role: "Senior DevOps/Infra Engineer", intervalMs: 15000 }, taskService, agentMemoryService, communicationService);
+  const emiAgent = new EmiAgentDaemon({ id: 9, name: "Emi", role: "Engineering Manager / Tech Lead", intervalMs: 16000 }, taskService, agentMemoryService, communicationService);
+  const zaraAgent = new ZaraAgentDaemon({ id: 10, name: "Zara", role: "Admin + Platform Governor Agent", intervalMs: 17000 }, taskService, agentMemoryService, communicationService);
+
+
+  // Start all agent daemons
+  samAgent.start();
+  baileyAgent.start();
+  dexAgent.start();
+  tessAgent.start();
+  ollieAgent.start();
+  siennaAgent.start();
+  ariaAgent.start();
+  novaAgent.start();
+  emiAgent.start();
+  zaraAgent.start();
+
+  // --- Autonomous Task Initiation: Agents propose/initiate/assign tasks without user input ---
+  setInterval(async () => {
+    try {
+      // Example: Each agent has a small chance to propose a new task
+      const agents = [samAgent, baileyAgent, dexAgent, tessAgent, ollieAgent, siennaAgent, ariaAgent, novaAgent, emiAgent];
+      for (const agent of agents) {
+        if (Math.random() < 0.05) { // 5% chance per interval
+          const personality = getAgentPersonality(agent.options.id);
+          const title = `Autonomous Task by ${agent.options.name}`;
+          const description = `A new task initiated by ${agent.options.name} (${personality.traits.join(", ")})`;
+          const tags = [agent.options.role, ...personality.expertise];
+          const priority = 'medium';
+          // Propose the task
+          const taskData = {
+            title,
+            description,
+            status: "pending",
+            assignedToId: null,
+            createdById: String(agent.options.id),
+            tags,
+            priority,
+            workflow: {
+              stage: "requirements",
+              history: [],
+              nextAgent: "product_manager"
+            }
+          };
+          const newTask = await taskService.createTask(taskData);
+          await agentLearnFromOutcome(agent.options.id, newTask.id, "initiated autonomous task");
+          // Optionally, negotiate assignment among agents
+          const agentIds = agents.map(a => a.options.id);
+          await negotiateTaskAssignment(agentIds, newTask.id);
+          // Broadcast to WebSocket clients
+          if (typeof wss !== 'undefined') {
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'task_created',
+                  data: newTask
+                }));
+              }
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Autonomous agent task initiation error:", err);
+    }
+  }, 30000); // Every 30s
+
+  // ---
+  // NOTE: Each agent daemon supports both default and document-driven workflow handoff.
+  // If a task/project specifies a workflow document (e.g., in attached_assets/),
+  // agents will parse and follow the agent sequence and rules from that document.
+  // Otherwise, the default hardcoded sequence is used.
+  // This enables explainable, dynamic, and externally-guided agent collaboration for software development.
+
+  // Agent explainability: get action log (thoughts + actions, with filtering, summarization, and causal explanations)
+  app.get('/api/agents/:id/explain', async (req: any, res: any) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      if (isNaN(agentId)) {
+        return res.status(400).json({ message: "Invalid agentId" });
+      }
+
+      // Use the already-instantiated agentMemoryService
+      let log = await agentMemoryService.getAgentMemory(agentId);
+
+      // --- Filtering ---
+      // ?type=thought|action|all, ?since=timestamp, ?until=timestamp
+      const { type, since, until, summary } = req.query;
+      if (type && type !== 'all') {
+        log = log.filter((entry: any) => entry.type === type);
+      }
+      if (since) {
+        const sinceTime = new Date(since as string).getTime();
+        log = log.filter((entry: any) => new Date(entry.timestamp).getTime() >= sinceTime);
+      }
+      if (until) {
+        const untilTime = new Date(until as string).getTime();
+        log = log.filter((entry: any) => new Date(entry.timestamp).getTime() <= untilTime);
+      }
+
+      // --- Summarization ---
+      let summaryText = undefined;
+      if (summary === 'true') {
+        // Simple summary: count types and most recent action
+        const typeCounts = log.reduce((acc: any, entry: any) => {
+          acc[entry.type] = (acc[entry.type] || 0) + 1;
+          return acc;
+        }, {});
+        const lastAction = log.filter((e: any) => e.type === 'action').slice(-1)[0];
+        summaryText = {
+          totalEntries: log.length,
+          typeCounts,
+          lastAction: lastAction ? lastAction.description || lastAction.content : null
+        };
+      }
+
+      // --- Causal Explanation ---
+      // For now, show a simple causal chain: for each action, what thought or event led to it
+      const causalChain = log
+        .filter((entry: any) => entry.type === 'action')
+        .map((action: any) => {
+          // Find the most recent thought or event before this action
+          const prior = log
+            .filter((e: any) => e.timestamp < action.timestamp && (e.type === 'thought' || e.type === 'event'))
+            .slice(-1)[0];
+          return {
+            action: action.description || action.content,
+            causedBy: prior ? (prior.description || prior.content) : null,
+            actionTime: action.timestamp,
+            causeTime: prior ? prior.timestamp : null
+          };
+        });
+
+      res.json({
+        log,
+        summary: summaryText,
+        causalChain
+      });
+    } catch (error) {
+      console.error("Error fetching agent explainability log:", error);
+      res.status(500).json({ message: "Failed to fetch agent explainability log" });
+    }
+  });
+
+  // --- Admin Settings (in-memory, admin-only; add auth later) ---
+  const adminSettings = {
+    teamsIntegrationEnabled: true, // If false, agents cannot send messages to Microsoft Teams
+    agentChatOnTaskCompleteEnabled: true // If true, agents respond via chat on task complete (if user online), else fallback to email
+  };
+
+  // GET admin settings (admin-only; add auth later)
+  app.get('/api/admin/settings', (req: any, res: any) => {
+    // TODO: Add admin authentication/authorization
+    res.json(adminSettings);
+  });
+
+  // POST admin settings (admin-only; add auth later)
+  app.post('/api/admin/settings', (req: any, res: any) => {
+    // TODO: Add admin authentication/authorization
+    const { teamsIntegrationEnabled, agentChatOnTaskCompleteEnabled } = req.body;
+    if (typeof teamsIntegrationEnabled === 'boolean') {
+      adminSettings.teamsIntegrationEnabled = teamsIntegrationEnabled;
+    }
+    if (typeof agentChatOnTaskCompleteEnabled === 'boolean') {
+      adminSettings.agentChatOnTaskCompleteEnabled = agentChatOnTaskCompleteEnabled;
+    }
+    res.json(adminSettings);
+  });
+
+  // --- Utility functions for agent/notification logic ---
+  function isTeamsIntegrationEnabled() {
+    return adminSettings.teamsIntegrationEnabled;
+  }
+  function isAgentChatOnTaskCompleteEnabled() {
+    return adminSettings.agentChatOnTaskCompleteEnabled;
+  }
+
+  // Usage example (add these checks in your agent/notification logic):
+  // if (isTeamsIntegrationEnabled()) {
+  //   // Send message to Microsoft Teams
+  // }
+  // if (isAgentChatOnTaskCompleteEnabled()) {
+  //   // Respond to user via chat if online
+  // } else {
+  //   // Fallback: send to user email
+  // }
+
+  // --- Example: Hook into task processing to update/emit progress ---
+// (You should call updateAndEmitTaskProgress at key points in your agent/task logic)
+// Example usage after a task is processed:
+// updateAndEmitTaskProgress(taskId, {
+//   percent: 65,
+//   stage: "Tess is generating test cases from Bailey's user stories",
+//   agents: ["Bailey", "Tess"],
+//   blockers: ["Waiting for user confirmation on edge cases"]
+// });
 
   return httpServer;
 }

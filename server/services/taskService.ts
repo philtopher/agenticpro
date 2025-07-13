@@ -258,4 +258,12 @@ export class TaskService {
       this.startAutomaticTaskProcessing(taskId);
     }, 1000);
   }
+
+  async getTasksForAgent(agentId: number) {
+    return this.storage.getTasks({ assignedToId: agentId });
+  }
+
+  async getTasks() {
+    return this.storage.getTasks({});
+  }
 }

@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import { useEffect } from 'react';
+  // Fetch workflow history from API
+  const { data: workflowHistory, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ["/api/tasks", taskId, "history"],
+    enabled: !!taskId,
+  });
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -326,18 +332,22 @@ export function TaskDetailModal({ isOpen, onClose, taskId }: TaskDetailModalProp
                   </CardContent>
                 </Card>
 
-                {task.workflow?.history && task.workflow.history.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Workflow History</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Workflow History</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingHistory ? (
+                      <p>Loading workflow history...</p>
+                    ) : !workflowHistory || workflowHistory.length === 0 ? (
+                      <p className="text-gray-500">No workflow history found.</p>
+                    ) : (
                       <div className="space-y-3">
-                        {task.workflow.history.map((entry: any, index: number) => (
+                        {workflowHistory.map((entry: any, index: number) => (
                           <div key={index} className="border-l-2 border-gray-200 pl-4">
                             <div className="flex items-center justify-between">
                               <span className="font-medium">{entry.agent}</span>
-                              <span className="text-sm text-gray-500">{formatDate(entry.timestamp)}</span>
+                              <span className="text-sm text-gray-500">{entry.timestamp ? formatDate(entry.timestamp) : ''}</span>
                             </div>
                             <p className="text-sm text-gray-600">{entry.action}</p>
                             {entry.response && (
@@ -346,9 +356,9 @@ export function TaskDetailModal({ isOpen, onClose, taskId }: TaskDetailModalProp
                           </div>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </ScrollArea>
           </TabsContent>

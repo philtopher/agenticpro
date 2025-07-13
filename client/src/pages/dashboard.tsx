@@ -14,35 +14,39 @@ import { ArtifactCard } from "@/components/ArtifactCard";
 import { TopNavigation } from "@/components/TopNavigation";
 import { Sidebar } from "@/components/Sidebar";
 import { TestingPanel } from "@/components/TestingPanel";
+import { GovernorPanel } from "@/components/GovernorPanel";
+import { CollaborationPanel } from "@/components/CollaborationPanel";
+import { Link } from "react-router-dom";
 
-export default function Dashboard() {
+export default function DashboardPage() {
   const { toast } = useToast();
-  const { isConnected, lastMessage } = useWebSocket();
+  const { isConnected } = useWebSocket();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
 
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  // Use correct types and default values for queries
+  const { data: metrics = {}, isLoading: metricsLoading } = useQuery<any>({
     queryKey: ["/api/metrics"],
     retry: false,
   });
 
-  const { data: agents } = useQuery({
+  const { data: agents = [] } = useQuery<any[]>({
     queryKey: ["/api/agents"],
     retry: false,
   });
 
-  const { data: tasks } = useQuery({
+  const { data: tasks = [] } = useQuery<any[]>({
     queryKey: ["/api/tasks"],
     retry: false,
   });
 
-  const { data: communications } = useQuery({
+  const { data: communications = [] } = useQuery<any[]>({
     queryKey: ["/api/communications"],
     retry: false,
   });
 
-  const { data: artifacts } = useQuery({
+  const { data: artifacts = [] } = useQuery<any[]>({
     queryKey: ["/api/artifacts"],
     retry: false,
   });
@@ -73,17 +77,22 @@ export default function Dashboard() {
               <div className="flex items-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>{agents?.filter(a => a.status === "active").length || 0} agents active</span>
+                  <span>{Array.isArray(agents) ? agents.filter((a: any) => a.status === "active").length : 0} agents active</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span>{agents?.filter(a => a.status === "busy").length || 0} agents busy</span>
+                  <span>{Array.isArray(agents) ? agents.filter((a: any) => a.status === "busy").length : 0} agents busy</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                   <span>WebSocket {isConnected ? 'connected' : 'disconnected'}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Admin Section Link */}
+            <div className="flex justify-end p-4">
+              <Link to="/admin" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">Admin Panel</Link>
             </div>
 
             {/* System Health Overview */}
@@ -95,7 +104,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold text-gray-900">
-                      {metrics?.activeTasks || 0}
+                      {metrics.activeTasks || 0}
                     </span>
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-tasks text-blue-600"></i>
@@ -111,7 +120,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold text-gray-900">
-                      {metrics?.completedTasks || 0}
+                      {metrics.completedTasks || 0}
                     </span>
                     <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-check-circle text-green-600"></i>
@@ -127,7 +136,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold text-gray-900">
-                      {metrics?.escalatedIssues || 0}
+                      {metrics.escalatedIssues || 0}
                     </span>
                     <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-exclamation-triangle text-yellow-600"></i>
@@ -143,7 +152,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold text-gray-900">
-                      {metrics?.artifacts || 0}
+                      {metrics.artifacts || 0}
                     </span>
                     <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                       <i className="fas fa-file-alt text-purple-600"></i>
@@ -151,6 +160,12 @@ export default function Dashboard() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Collaboration & Oversight */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <CollaborationPanel />
+              <GovernorPanel />
             </div>
 
             {/* Active Workflows & Communications */}

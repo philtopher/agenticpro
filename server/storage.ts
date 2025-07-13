@@ -39,7 +39,7 @@ export interface IStorage {
   updateAgentHealth(id: number, healthScore: number): Promise<void>;
   
   // Task operations
-  getTasks(): Promise<Task[]>;
+  getTasks(filter: any): Promise<Task[]>;
   getTask(id: number): Promise<Task | undefined>;
   getTasksByAgent(agentId: number): Promise<Task[]>;
   getTasksByStatus(status: string): Promise<Task[]>;
@@ -72,6 +72,16 @@ export interface IStorage {
   getUnsentNotifications(): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationSent(id: number): Promise<void>;
+
+  /**
+   * Add a memory entry for an agent
+   */
+  addAgentMemory(params: { agentId: number, memory: string, metadata: any, createdAt: Date }): Promise<void>;
+
+  /**
+   * Get all memory entries for an agent
+   */
+  getAgentMemory(agentId: number): Promise<{ memory: string, metadata: any, createdAt: Date }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -140,7 +150,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Task operations
-  async getTasks(): Promise<Task[]> {
+  async getTasks(filter: any = {}): Promise<Task[]> {
+    // Example: filter by assignedToId
+    if (filter.assignedToId) {
+      return db.select().from(tasks).where(eq(tasks.assignedToId, filter.assignedToId)).orderBy(desc(tasks.createdAt)) as Task[];
+    }
     return await db.select().from(tasks).orderBy(desc(tasks.createdAt)) as Task[];
   }
 
@@ -308,6 +322,36 @@ export class DatabaseStorage implements IStorage {
       .update(notifications)
       .set({ sent: true, sentAt: new Date() })
       .where(eq(notifications.id, id));
+  }
+
+  /**
+   * Add a memory entry for an agent
+   */
+  async addAgentMemory({ agentId, memory, metadata, createdAt }: { agentId: number, memory: string, metadata: any, createdAt: Date }): Promise<void> {
+    // Insert into agent_memories table (create if not exists)
+    await db.insert('agent_memories').values({
+      agent_id: agentId,
+      memory,
+      metadata: JSON.stringify(metadata),
+      created_at: createdAt,
+    });
+  }
+
+  /**
+   * Get all memory entries for an agent
+   */
+  async getAgentMemory(agentId: number): Promise<{ memory: string, metadata: any, createdAt: Date }[]> {
+    const memories = await db
+      .select()
+      .from('agent_memories')
+      .where(eq('agent_memories.agent_id', agentId))
+      .orderBy(desc('agent_memories.created_at'));
+
+    return memories.map((memory) => ({
+      memory: memory.memory,
+      metadata: JSON.parse(memory.metadata),
+      createdAt: memory.created_at,
+    }));
   }
 }
 
