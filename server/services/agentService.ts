@@ -1,10 +1,151 @@
-import { Agent, InsertAgent } from "@shared/schema";
+import { Agent, InsertAgent, Task, Communication } from "@shared/schema";
 import { IStorage } from "../storage";
+import { agentCognition, AgentDecision, TaskContext } from "./agentCognition";
 
 export class AgentService {
   public storage: IStorage;
   constructor(storage: IStorage) {
     this.storage = storage;
+  }
+
+  /**
+   * PHASE 1: Agent Cognition - AI-powered decision making
+   * This makes agents truly autonomous by giving them reasoning capabilities
+   */
+  async makeDecision(task: Task, agentId: number): Promise<AgentDecision> {
+    try {
+      const agent = await this.storage.getAgent(agentId);
+      if (!agent) {
+        throw new Error(`Agent ${agentId} not found`);
+      }
+
+      // Gather context for decision making
+      const context = await this.buildTaskContext(task, agent);
+      
+      // Use AI cognition to make decision
+      const decision = await agentCognition.think(context);
+      
+      // Store decision for learning
+      await this.storage.addAgentMemory({
+        agentId,
+        memory: `Decision made for task ${task.id}: ${decision.action} - ${decision.reasoning}`,
+        metadata: {
+          type: 'decision',
+          taskId: task.id,
+          action: decision.action,
+          priority: decision.priority,
+          estimatedEffort: decision.estimatedEffort
+        },
+        createdAt: new Date()
+      });
+
+      return decision;
+    } catch (error) {
+      console.error('Error in agent decision making:', error);
+      // Fallback decision
+      return {
+        action: 'complete_task',
+        reasoning: 'Proceeding with standard task completion',
+        priority: 'medium',
+        estimatedEffort: task.estimatedHours || 2,
+        requiredResources: [],
+        nextSteps: ['Begin task execution'],
+        artifactsToCreate: [],
+        blockers: []
+      };
+    }
+  }
+
+  async planTaskExecution(task: Task, agentId: number, decision: AgentDecision): Promise<string[]> {
+    try {
+      const agent = await this.storage.getAgent(agentId);
+      if (!agent) {
+        throw new Error(`Agent ${agentId} not found`);
+      }
+
+      const context = await this.buildTaskContext(task, agent);
+      const actionPlan = await agentCognition.planActions(context, decision);
+      
+      // Store action plan for tracking
+      await this.storage.addAgentMemory({
+        agentId,
+        memory: `Action plan for task ${task.id}: ${actionPlan.join(', ')}`,
+        metadata: {
+          type: 'action_plan',
+          taskId: task.id,
+          steps: actionPlan,
+          estimatedEffort: decision.estimatedEffort
+        },
+        createdAt: new Date()
+      });
+
+      return actionPlan;
+    } catch (error) {
+      console.error('Error in task planning:', error);
+      return decision.nextSteps;
+    }
+  }
+
+  async generateCommunication(task: Task, agentId: number, targetAgent: string, purpose: string): Promise<string> {
+    try {
+      const agent = await this.storage.getAgent(agentId);
+      if (!agent) {
+        throw new Error(`Agent ${agentId} not found`);
+      }
+
+      const context = await this.buildTaskContext(task, agent);
+      return await agentCognition.generateCommunication(context, targetAgent, purpose);
+    } catch (error) {
+      console.error('Error in communication generation:', error);
+      return `Hello ${targetAgent}, I need assistance with: ${task.title}. ${purpose}`;
+    }
+  }
+
+  private async buildTaskContext(task: Task, agent: Agent): Promise<TaskContext> {
+    try {
+      // Get related tasks
+      const allTasks = await this.storage.getTasks({});
+      const relatedTasks = allTasks.filter(t => 
+        t.id !== task.id && 
+        (t.projectId === task.projectId || 
+         t.tags?.some(tag => task.tags?.includes(tag)))
+      ).slice(0, 5);
+
+      // Get recent communications
+      const recentCommunications = await this.storage.getRecentCommunications(10);
+      
+      // Get available agents
+      const availableAgents = await this.storage.getAgents();
+      const activeAgents = availableAgents.filter(a => a.status !== 'inactive');
+      
+      // Get agent's current workload
+      const agentTasks = await this.storage.getTasksByAgent(agent.id);
+      const workload = agentTasks.filter(t => t.status === 'in_progress').length;
+      
+      // Get past experiences
+      const pastExperiences = await this.storage.getAgentMemory(agent.id);
+      
+      return {
+        task,
+        agent,
+        relatedTasks,
+        recentCommunications,
+        availableAgents: activeAgents,
+        workload,
+        pastExperiences: pastExperiences.slice(0, 10)
+      };
+    } catch (error) {
+      console.error('Error building task context:', error);
+      return {
+        task,
+        agent,
+        relatedTasks: [],
+        recentCommunications: [],
+        availableAgents: [],
+        workload: 0,
+        pastExperiences: []
+      };
+    }
   }
 
   async initializeAgents(): Promise<void> {

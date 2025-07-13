@@ -2,16 +2,20 @@ import { IStorage } from '../storage';
 import { Task, Agent, InsertCommunication, InsertHealthEvent } from '@shared/schema';
 import { AgentAI } from './agentAI';
 import { CommunicationService } from './communicationService';
+import { AgentService } from './agentService';
+import { AgentDecision } from './agentCognition';
 
 export class WorkflowEngine {
   private agentAI: AgentAI;
   private communicationService: CommunicationService;
+  private agentService: AgentService;
   private isRunning = false;
   private processingQueue: Set<number> = new Set();
   
   constructor(private storage: IStorage) {
     this.agentAI = new AgentAI(storage);
     this.communicationService = new CommunicationService(storage);
+    this.agentService = new AgentService(storage);
   }
 
   async start(): Promise<void> {
@@ -106,21 +110,38 @@ export class WorkflowEngine {
         return;
       }
 
-      // Process task with agent
-      const result = await this.agentAI.processTask(agent, task);
+      // PHASE 1: AI-POWERED COGNITIVE DECISION MAKING
+      console.log(`🧠 Agent ${agent.name} is analyzing task ${task.id} using AI cognition...`);
+      
+      // Make AI-powered decision about how to handle the task
+      const decision = await this.agentService.makeDecision(task, agent.id);
+      console.log(`💭 ${agent.name} decided to: ${decision.action} - ${decision.reasoning}`);
+      
+      // Create detailed action plan
+      const actionPlan = await this.agentService.planTaskExecution(task, agent.id, decision);
+      console.log(`📋 Action plan created: ${actionPlan.slice(0, 2).join(', ')}...`);
+      
+      // Execute the decision
+      const result = await this.executeAgentDecision(agent, task, decision, actionPlan);
       
       if (result.success) {
         console.log(`✅ Task ${task.id} processed successfully by ${agent.name}`);
         
-        // Update task status
+        // Update task status based on decision
+        const newStatus = this.determineTaskStatus(decision, result);
         await this.storage.updateTask(task.id, {
-          status: result.shouldEscalate ? 'escalated' : 'in_progress',
+          status: newStatus,
           updatedAt: new Date()
         });
 
+        // Handle collaboration if needed
+        if (decision.collaborationNeeded) {
+          await this.handleCollaborationRequest(task, agent, decision);
+        }
+
         // Handle escalation if needed
-        if (result.shouldEscalate) {
-          await this.escalateTask(task, agent, result.escalationReason);
+        if (decision.action === 'escalate') {
+          await this.escalateTask(task, agent, decision.reasoning);
         }
 
         // Create follow-up actions based on result
@@ -132,6 +153,236 @@ export class WorkflowEngine {
     } catch (error) {
       console.error(`Error processing task ${task.id}:`, error);
       await this.handleTaskFailure(task, null, error.message);
+    }
+  }
+
+  /**
+   * PHASE 1: Execute AI-powered agent decision
+   */
+  private async executeAgentDecision(agent: Agent, task: Task, decision: AgentDecision, actionPlan: string[]): Promise<any> {
+    try {
+      // Record the decision execution
+      await this.storage.createCommunication({
+        fromAgentId: agent.id,
+        message: `Executing decision: ${decision.action}. Reasoning: ${decision.reasoning}`,
+        messageType: 'agent_decision',
+        taskId: task.id,
+        metadata: {
+          decision,
+          actionPlan,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Execute based on decision type
+      switch (decision.action) {
+        case 'complete_task':
+          return await this.executeTaskCompletion(agent, task, decision, actionPlan);
+        
+        case 'request_help':
+          return await this.executeHelpRequest(agent, task, decision);
+        
+        case 'delegate_task':
+          return await this.executeDelegation(agent, task, decision);
+        
+        case 'gather_info':
+          return await this.executeInformationGathering(agent, task, decision);
+        
+        case 'collaborate':
+          return await this.executeCollaboration(agent, task, decision);
+        
+        case 'escalate':
+          return await this.executeEscalation(agent, task, decision);
+        
+        default:
+          return await this.executeTaskCompletion(agent, task, decision, actionPlan);
+      }
+    } catch (error) {
+      console.error(`Error executing decision for task ${task.id}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async executeTaskCompletion(agent: Agent, task: Task, decision: AgentDecision, actionPlan: string[]): Promise<any> {
+    console.log(`🎯 ${agent.name} is executing task completion plan`);
+    
+    // Create artifacts based on agent type and decision
+    const artifacts = await this.createTaskArtifacts(agent, task, decision);
+    
+    // Update task progress
+    await this.storage.updateTask(task.id, {
+      status: 'in_progress',
+      progress: Math.min(100, (task.progress || 0) + 25),
+      updatedAt: new Date()
+    });
+
+    return {
+      success: true,
+      artifacts,
+      nextActions: actionPlan,
+      shouldEscalate: decision.blockers && decision.blockers.length > 0
+    };
+  }
+
+  private async executeHelpRequest(agent: Agent, task: Task, decision: AgentDecision): Promise<any> {
+    console.log(`🤝 ${agent.name} is requesting help for task ${task.id}`);
+    
+    // Find appropriate helper agent
+    const availableAgents = await this.storage.getAgents();
+    const helperAgent = availableAgents.find(a => 
+      a.id !== agent.id && 
+      a.status === 'active' && 
+      a.currentLoad < a.maxLoad
+    );
+
+    if (helperAgent) {
+      const helpMessage = await this.agentService.generateCommunication(
+        task, 
+        agent.id, 
+        helperAgent.name, 
+        `I need assistance with: ${decision.reasoning}`
+      );
+
+      await this.storage.createCommunication({
+        fromAgentId: agent.id,
+        toAgentId: helperAgent.id,
+        message: helpMessage,
+        messageType: 'help_request',
+        taskId: task.id,
+        metadata: { decision, timestamp: new Date().toISOString() }
+      });
+    }
+
+    return { success: true, helperAssigned: helperAgent?.name };
+  }
+
+  private async executeDelegation(agent: Agent, task: Task, decision: AgentDecision): Promise<any> {
+    console.log(`👋 ${agent.name} is delegating task ${task.id}`);
+    
+    // Find appropriate delegate
+    const availableAgents = await this.storage.getAgents();
+    const delegate = availableAgents.find(a => 
+      a.id !== agent.id && 
+      a.status === 'active' && 
+      a.currentLoad < a.maxLoad
+    );
+
+    if (delegate) {
+      // Transfer task assignment
+      await this.storage.updateTask(task.id, {
+        assignedAgentId: delegate.id,
+        updatedAt: new Date()
+      });
+
+      // Notify delegate
+      const delegationMessage = await this.agentService.generateCommunication(
+        task, 
+        agent.id, 
+        delegate.name, 
+        `I'm delegating this task to you. ${decision.reasoning}`
+      );
+
+      await this.storage.createCommunication({
+        fromAgentId: agent.id,
+        toAgentId: delegate.id,
+        message: delegationMessage,
+        messageType: 'task_delegation',
+        taskId: task.id,
+        metadata: { decision, timestamp: new Date().toISOString() }
+      });
+    }
+
+    return { success: true, delegatedTo: delegate?.name };
+  }
+
+  private async executeInformationGathering(agent: Agent, task: Task, decision: AgentDecision): Promise<any> {
+    console.log(`📊 ${agent.name} is gathering information for task ${task.id}`);
+    
+    // Create information gathering communication
+    await this.storage.createCommunication({
+      fromAgentId: agent.id,
+      message: `Gathering information: ${decision.reasoning}`,
+      messageType: 'information_gathering',
+      taskId: task.id,
+      metadata: { decision, timestamp: new Date().toISOString() }
+    });
+
+    return { success: true, infoGathered: true };
+  }
+
+  private async executeCollaboration(agent: Agent, task: Task, decision: AgentDecision): Promise<any> {
+    console.log(`🤝 ${agent.name} is initiating collaboration for task ${task.id}`);
+    
+    if (decision.collaborationNeeded) {
+      await this.handleCollaborationRequest(task, agent, decision);
+    }
+
+    return { success: true, collaborationInitiated: true };
+  }
+
+  private async executeEscalation(agent: Agent, task: Task, decision: AgentDecision): Promise<any> {
+    console.log(`🚨 ${agent.name} is escalating task ${task.id}`);
+    
+    await this.escalateTask(task, agent, decision.reasoning);
+    
+    return { success: true, escalated: true };
+  }
+
+  private async createTaskArtifacts(agent: Agent, task: Task, decision: AgentDecision): Promise<any[]> {
+    const artifacts = [];
+    
+    // Create artifacts based on agent type and decision
+    if (decision.artifactsToCreate && decision.artifactsToCreate.length > 0) {
+      for (const artifactType of decision.artifactsToCreate) {
+        const artifact = await this.storage.createArtifact({
+          title: `${artifactType} for ${task.title}`,
+          type: artifactType,
+          content: `Generated by ${agent.name} for task: ${task.title}`,
+          taskId: task.id,
+          createdBy: agent.id,
+          status: 'draft',
+          metadata: { decision, timestamp: new Date().toISOString() }
+        });
+        
+        artifacts.push(artifact);
+      }
+    }
+    
+    return artifacts;
+  }
+
+  private determineTaskStatus(decision: AgentDecision, result: any): string {
+    if (decision.action === 'escalate') return 'escalated';
+    if (decision.action === 'delegate_task') return 'assigned';
+    if (result.artifacts && result.artifacts.length > 0) return 'in_progress';
+    return 'active';
+  }
+
+  private async handleCollaborationRequest(task: Task, agent: Agent, decision: AgentDecision): Promise<void> {
+    if (!decision.collaborationNeeded) return;
+    
+    const availableAgents = await this.storage.getAgents();
+    const targetAgent = availableAgents.find(a => 
+      a.name.toLowerCase().includes(decision.collaborationNeeded.targetAgent.toLowerCase()) ||
+      a.type.includes(decision.collaborationNeeded.targetAgent.toLowerCase())
+    );
+
+    if (targetAgent) {
+      const collaborationMessage = await this.agentService.generateCommunication(
+        task,
+        agent.id,
+        targetAgent.name,
+        decision.collaborationNeeded.message
+      );
+
+      await this.storage.createCommunication({
+        fromAgentId: agent.id,
+        toAgentId: targetAgent.id,
+        message: collaborationMessage,
+        messageType: 'collaboration_request',
+        taskId: task.id,
+        metadata: { decision, timestamp: new Date().toISOString() }
+      });
     }
   }
 

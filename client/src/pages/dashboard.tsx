@@ -16,7 +16,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { TestingPanel } from "@/components/TestingPanel";
 import { GovernorPanel } from "@/components/GovernorPanel";
 import { CollaborationPanel } from "@/components/CollaborationPanel";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 export default function DashboardPage() {
   const { toast } = useToast();
