@@ -18,7 +18,12 @@ import { MessageRoutingService } from "./services/messageRoutingService";
 import { AgentAI } from "./services/agentAI";
 import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from "@shared/schema";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(
+  app: Express, 
+  workflowEngine?: any, 
+  projectService?: any, 
+  versionControlService?: any
+): Promise<Server> {
   // Initialize services
   const agentService = new AgentService(storage);
   const taskService = new TaskService(storage);
@@ -241,6 +246,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all artifact versions for a given task
+  app.get('/api/tasks/:taskId/artifacts', async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      if (isNaN(taskId)) {
+        return res.status(400).json({ message: "Invalid taskId" });
+      }
+      const artifacts = await storage.getArtifactsByTask(taskId);
+      res.json(artifacts);
+    } catch (error) {
+      console.error("Error fetching artifacts by task:", error);
+      res.status(500).json({ message: "Failed to fetch artifacts for task" });
+    }
+  });
+
   // Health monitoring routes
   app.get('/api/health/events', async (req, res) => {
     try {
@@ -256,6 +276,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/metrics', async (req, res) => {
     try {
       const metrics = await agentService.getSystemMetrics();
+      
+      // Add workflow engine metrics if available
+      if (workflowEngine) {
+        const workflowStatus = await workflowEngine.getWorkflowStatus();
+        metrics.workflowEngine = workflowStatus;
+      }
+      
       res.json(metrics);
     } catch (error) {
       console.error("Error fetching metrics:", error);
@@ -510,6 +537,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating communication:", error);
       res.status(500).json({ message: "Failed to create communication" });
+    }
+  });
+
+  // Project management endpoints
+  app.post("/api/projects", async (req, res) => {
+    try {
+      if (!projectService) {
+        return res.status(500).json({ message: "Project service not available" });
+      }
+      
+      const project = await projectService.createProject(req.body);
+      res.json(project);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(500).json({ message: "Failed to create project" });
+    }
+  });
+
+  app.post("/api/projects/auto-create", async (req, res) => {
+    try {
+      if (!projectService) {
+        return res.status(500).json({ message: "Project service not available" });
+      }
+      
+      const project = await projectService.autoCreateProjectFromRequest(req.body);
+      res.json(project);
+    } catch (error) {
+      console.error("Error auto-creating project:", error);
+      res.status(500).json({ message: "Failed to auto-create project" });
+    }
+  });
+
+  app.get("/api/projects/:id/status", async (req, res) => {
+    try {
+      if (!projectService) {
+        return res.status(500).json({ message: "Project service not available" });
+      }
+      
+      const status = await projectService.getProjectStatus(req.params.id);
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching project status:", error);
+      res.status(500).json({ message: "Failed to fetch project status" });
+    }
+  });
+
+  // Version control endpoints
+  app.get("/api/artifacts/:id/versions", async (req, res) => {
+    try {
+      if (!versionControlService) {
+        return res.status(500).json({ message: "Version control service not available" });
+      }
+      
+      const artifactId = parseInt(req.params.id);
+      const history = await versionControlService.getVersionHistory(artifactId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching version history:", error);
+      res.status(500).json({ message: "Failed to fetch version history" });
+    }
+  });
+
+  app.post("/api/artifacts/:id/restore", async (req, res) => {
+    try {
+      if (!versionControlService) {
+        return res.status(500).json({ message: "Version control service not available" });
+      }
+      
+      const artifactId = parseInt(req.params.id);
+      const { version } = req.body;
+      const success = await versionControlService.restoreArtifactVersion(artifactId, version);
+      
+      if (success) {
+        res.json({ message: "Version restored successfully" });
+      } else {
+        res.status(400).json({ message: "Failed to restore version" });
+      }
+    } catch (error) {
+      console.error("Error restoring version:", error);
+      res.status(500).json({ message: "Failed to restore version" });
+    }
+  });
+
+  // Workflow control endpoints
+  app.post("/api/workflow/pause-task", async (req, res) => {
+    try {
+      if (!workflowEngine) {
+        return res.status(500).json({ message: "Workflow engine not available" });
+      }
+      
+      const { taskId } = req.body;
+      await workflowEngine.pauseTask(taskId);
+      res.json({ message: "Task paused successfully" });
+    } catch (error) {
+      console.error("Error pausing task:", error);
+      res.status(500).json({ message: "Failed to pause task" });
+    }
+  });
+
+  app.post("/api/workflow/resume-task", async (req, res) => {
+    try {
+      if (!workflowEngine) {
+        return res.status(500).json({ message: "Workflow engine not available" });
+      }
+      
+      const { taskId } = req.body;
+      await workflowEngine.resumeTask(taskId);
+      res.json({ message: "Task resumed successfully" });
+    } catch (error) {
+      console.error("Error resuming task:", error);
+      res.status(500).json({ message: "Failed to resume task" });
+    }
+  });
+
+  app.get("/api/workflow/status", async (req, res) => {
+    try {
+      if (!workflowEngine) {
+        return res.status(500).json({ message: "Workflow engine not available" });
+      }
+      
+      const status = await workflowEngine.getWorkflowStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching workflow status:", error);
+      res.status(500).json({ message: "Failed to fetch workflow status" });
     }
   });
 

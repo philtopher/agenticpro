@@ -1,338 +1,296 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useWebSocket } from "@/hooks/useWebSocket";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageCircle, Send, Bot, User } from "lucide-react";
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { Send, MessageSquare, Bot, User } from 'lucide-react';
+
+interface Message {
+  id: number;
+  fromAgentId: number | null;
+  toAgentId: number | null;
+  taskId: number | null;
+  message: string;
+  messageType: string;
+  createdAt: string;
+  metadata: any;
+}
+
+interface Agent {
+  id: number;
+  name: string;
+  type: string;
+  status: string;
+}
 
 export default function Chat() {
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
-  const [message, setMessage] = useState("");
-  const [taskId, setTaskId] = useState<number | null>(null);
+  const [message, setMessage] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [selectedTask, setSelectedTask] = useState<string>('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  const { sendMessage } = useWebSocket();
 
-  const { data: agents = [] } = useQuery({
-    queryKey: ["/api/agents"],
+  // WebSocket connection
+  const { socket, isConnected } = useWebSocket();
+
+  // Fetch agents
+  const { data: agents = [] } = useQuery<Agent[]>({
+    queryKey: ['/api/agents'],
   });
 
+  // Fetch tasks
   const { data: tasks = [] } = useQuery({
-    queryKey: ["/api/tasks"],
+    queryKey: ['/api/tasks'],
   });
 
-  const { data: communications = [] } = useQuery({
-    queryKey: ["/api/communications"],
+  // Fetch messages
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
+    queryKey: ['/api/communications'],
   });
 
-  const sendCommunicationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("/api/communicate", {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async (messageData: {
+      message: string;
+      toAgentId?: number;
+      taskId?: number;
+    }) => {
+      return await apiRequest('/api/communications', {
+        method: 'POST',
+        body: messageData,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/communications"] });
-      setMessage("");
+      setMessage('');
+      queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
     },
   });
 
-  const selectedAgentData = agents.find((agent: any) => agent.id === selectedAgent);
-  const filteredCommunications = selectedAgent
-    ? communications.filter((comm: any) => 
-        comm.fromAgentId === selectedAgent || comm.toAgentId === selectedAgent
-      )
-    : communications;
+  // Auto-create project mutation
+  const autoCreateProjectMutation = useMutation({
+    mutationFn: async (projectData: {
+      description: string;
+      title?: string;
+      context?: any;
+    }) => {
+      return await apiRequest('/api/projects/auto-create', {
+        method: 'POST',
+        body: projectData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
+    },
+  });
 
-  const handleSendMessage = () => {
-    console.log("handleSendMessage called");
-    console.log("message:", message);
-    console.log("selectedAgent:", selectedAgent);
-    console.log("message.trim():", message.trim());
-    
-    if (!message.trim() || !selectedAgent) {
-      console.log("Validation failed - message or agent not selected");
-      return;
+  // Handle WebSocket messages
+  useEffect(() => {
+    if (socket) {
+      const handleMessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'communication_created') {
+          queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
+        }
+      };
+
+      socket.addEventListener('message', handleMessage);
+      return () => socket.removeEventListener('message', handleMessage);
     }
+  }, [socket, queryClient]);
 
-    const communicationData = {
-      fromAgentId: null, // User message
-      toAgentId: selectedAgent,
-      taskId: taskId,
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+
+    console.log('Submitting message:', message);
+    console.log('Selected agent:', selectedAgent);
+    console.log('Selected task:', selectedTask);
+
+    const messageData = {
       message: message.trim(),
-      messageType: "user_message",
-      metadata: {
-        timestamp: new Date().toISOString(),
-        userInitiated: true,
-      },
+      toAgentId: selectedAgent ? parseInt(selectedAgent) : undefined,
+      taskId: selectedTask ? parseInt(selectedTask) : undefined,
     };
 
-    console.log("Sending communication data:", communicationData);
-    sendCommunicationMutation.mutate(communicationData);
-    
-    // Send WebSocket message for real-time updates
-    sendMessage({
-      type: "user_message",
-      data: communicationData,
-    });
+    // Check if message is requesting project creation
+    const lowerMessage = message.toLowerCase();
+    const projectKeywords = ['create project', 'new project', 'start project', 'build a', 'develop a'];
+    const isProjectRequest = projectKeywords.some(keyword => lowerMessage.includes(keyword));
+
+    if (isProjectRequest) {
+      autoCreateProjectMutation.mutate({
+        description: message,
+        context: { selectedAgent, selectedTask }
+      });
+    } else {
+      sendMessageMutation.mutate(messageData);
+    }
   };
 
-  const handleAgentResponse = (agentId: number, responseMessage: string) => {
-    const responseData = {
-      fromAgentId: agentId,
-      toAgentId: null, // Response to user
-      taskId: taskId,
-      message: responseMessage,
-      messageType: "agent_response",
-      metadata: {
-        timestamp: new Date().toISOString(),
-        isResponse: true,
-      },
-    };
-
-    sendCommunicationMutation.mutate(responseData);
-    
-    sendMessage({
-      type: "agent_response",
-      data: responseData,
-    });
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString();
   };
 
-  const getAgentName = (agentId: number) => {
-    const agent = agents.find((a: any) => a.id === agentId);
-    return agent ? agent.name : "Unknown Agent";
+  const getAgentName = (agentId: number | null) => {
+    if (!agentId) return 'User';
+    const agent = agents.find(a => a.id === agentId);
+    return agent ? agent.name : `Agent ${agentId}`;
   };
 
-  const getAgentType = (agentId: number) => {
-    const agent = agents.find((a: any) => a.id === agentId);
-    return agent ? agent.type : "unknown";
+  const getMessageTypeColor = (messageType: string) => {
+    switch (messageType) {
+      case 'user_message': return 'bg-blue-100 text-blue-800';
+      case 'agent_response': return 'bg-green-100 text-green-800';
+      case 'task_assignment': return 'bg-purple-100 text-purple-800';
+      case 'inter_agent': return 'bg-orange-100 text-orange-800';
+      case 'escalation': return 'bg-red-100 text-red-800';
+      case 'handoff': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-2 mb-6">
-        <MessageCircle className="h-8 w-8 text-blue-600" />
-        <h1 className="text-3xl font-bold">Agent Chat</h1>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Agent Selection & Chat Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Chat Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Select Agent</label>
-              <Select value={selectedAgent?.toString() || ""} onValueChange={(value) => setSelectedAgent(parseInt(value))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an agent to chat with" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent: any) => (
-                    <SelectItem key={agent.id} value={agent.id.toString()}>
-                      {agent.name} - {agent.type.replace("_", " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">Related Task (Optional)</label>
-              <Select value={taskId?.toString() || "none"} onValueChange={(value) => setTaskId(value === "none" ? null : parseInt(value))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Link to a task" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No task selected</SelectItem>
-                  {tasks.map((task: any) => (
-                    <SelectItem key={task.id} value={task.id.toString()}>
-                      {task.title} - {task.status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedAgentData && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Bot className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">{selectedAgentData.name}</span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  {selectedAgentData.type.replace("_", " ")} - {selectedAgentData.status}
-                </p>
-                <div className="mt-2 text-xs text-gray-500">
-                  Load: {selectedAgentData.currentLoad}/{selectedAgentData.maxLoad} | 
-                  Health: {selectedAgentData.healthScore}%
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Chat Messages */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>
-              {selectedAgent ? `Chat with ${getAgentName(selectedAgent)}` : "Select an agent to start chatting"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-96 w-full border rounded-md p-4 mb-4">
-              {filteredCommunications.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>No messages yet. Start a conversation!</p>
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Agent Communication Hub
+            <Badge variant={isConnected ? 'default' : 'destructive'}>
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Message Display */}
+            <ScrollArea className="h-96 border rounded-lg p-4">
+              {messagesLoading ? (
+                <div className="text-center py-8">Loading messages...</div>
+              ) : messages.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No messages yet. Start a conversation with an agent!
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {filteredCommunications.map((comm: any) => (
+                <div className="space-y-3">
+                  {messages.map((msg) => (
                     <div
-                      key={comm.id}
-                      className={`flex items-start gap-3 ${
-                        comm.fromAgentId === null ? "justify-end" : "justify-start"
-                      }`}
+                      key={msg.id}
+                      className={`flex ${msg.fromAgentId ? 'justify-start' : 'justify-end'}`}
                     >
-                      {comm.fromAgentId !== null && (
-                        <div className="flex-shrink-0">
-                          <Bot className="h-8 w-8 p-1 bg-blue-100 dark:bg-blue-900 rounded-full text-blue-600" />
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          msg.fromAgentId 
+                            ? 'bg-gray-100 text-gray-900' 
+                            : 'bg-blue-500 text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          {msg.fromAgentId ? (
+                            <Bot className="h-4 w-4" />
+                          ) : (
+                            <User className="h-4 w-4" />
+                          )}
+                          <span className="font-medium text-sm">
+                            {getAgentName(msg.fromAgentId)}
+                          </span>
+                          {msg.toAgentId && (
+                            <span className="text-xs opacity-70">
+                              → {getAgentName(msg.toAgentId)}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <div className={`max-w-xs lg:max-w-md ${comm.fromAgentId === null ? "order-first" : ""}`}>
-                        <div
-                          className={`p-3 rounded-lg ${
-                            comm.fromAgentId === null
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 dark:bg-gray-800"
-                          }`}
-                        >
-                          <p className="text-sm">{comm.message}</p>
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          {comm.fromAgentId === null ? "You" : getAgentName(comm.fromAgentId)} • 
-                          {new Date(comm.createdAt).toLocaleTimeString()}
+                        <div className="text-sm">{msg.message}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs opacity-70">
+                            {formatTime(msg.createdAt)}
+                          </span>
+                          <Badge 
+                            variant="outline"
+                            className={`text-xs ${getMessageTypeColor(msg.messageType)}`}
+                          >
+                            {msg.messageType}
+                          </Badge>
                         </div>
                       </div>
-                      {comm.fromAgentId === null && (
-                        <div className="flex-shrink-0">
-                          <User className="h-8 w-8 p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600" />
-                        </div>
-                      )}
                     </div>
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="flex gap-2">
-              <Textarea
-                placeholder={selectedAgent ? `Type a message to ${getAgentName(selectedAgent)}...` : "Select an agent first"}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                disabled={!selectedAgent}
-                rows={3}
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-              />
-              <Button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log("Button clicked");
-                  handleSendMessage();
-                }}
-                disabled={!selectedAgent || !message.trim() || sendCommunicationMutation.isPending}
-                className="self-end"
-                type="button"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="flex gap-2">
+                <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All agents</SelectItem>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id.toString()}>
+                        {agent.name} ({agent.type})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedTask} onValueChange={setSelectedTask}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select task" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No task</SelectItem>
+                    {tasks.map((task: any) => (
+                      <SelectItem key={task.id} value={task.id.toString()}>
+                        {task.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Type your message or create a project..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  className="flex-1"
+                  disabled={sendMessageMutation.isPending || autoCreateProjectMutation.isPending}
+                />
+                <Button 
+                  type="submit" 
+                  disabled={!message.trim() || sendMessageMutation.isPending || autoCreateProjectMutation.isPending}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+
+            {/* Status indicators */}
+            <div className="flex gap-2 text-sm text-gray-500">
+              <span>
+                {sendMessageMutation.isPending ? 'Sending...' : 
+                 autoCreateProjectMutation.isPending ? 'Creating project...' : 
+                 'Ready'}
+              </span>
+              <span>•</span>
+              <span>{agents.length} agents available</span>
+              <span>•</span>
+              <span>{tasks.length} tasks active</span>
             </div>
-
-            {/* Quick Actions */}
-            {selectedAgent && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessage("What tasks are you currently working on?")}
-                >
-                  Ask about current tasks
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessage("Can you help me with a new project?")}
-                >
-                  Request project help
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessage("What's your current workload?")}
-                >
-                  Check workload
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessage("Do you need any clarification on requirements?")}
-                >
-                  Ask for clarification
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Agent Status Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Agent Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agents.map((agent: any) => (
-              <div
-                key={agent.id}
-                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                  selectedAgent === agent.id ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                }`}
-                onClick={() => setSelectedAgent(agent.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <Bot className="h-8 w-8 text-blue-600" />
-                  <div className="flex-1">
-                    <h3 className="font-medium">{agent.name}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {agent.type.replace("_", " ")}
-                    </p>
-                  </div>
-                  <Badge variant={agent.status === "active" ? "default" : "secondary"}>
-                    {agent.status}
-                  </Badge>
-                </div>
-                <div className="mt-2 text-sm text-gray-500">
-                  Load: {agent.currentLoad}/{agent.maxLoad} | Health: {agent.healthScore}%
-                </div>
-              </div>
-            ))}
           </div>
         </CardContent>
       </Card>
