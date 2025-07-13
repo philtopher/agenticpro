@@ -30,8 +30,8 @@ interface Agent {
 
 export default function Chat() {
   const [message, setMessage] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState<string>('');
-  const [selectedTask, setSelectedTask] = useState<string>('');
+  const [selectedAgent, setSelectedAgent] = useState<string>('0');
+  const [selectedTask, setSelectedTask] = useState<string>('0');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -118,8 +118,8 @@ export default function Chat() {
 
     const messageData = {
       message: message.trim(),
-      toAgentId: selectedAgent ? parseInt(selectedAgent) : undefined,
-      taskId: selectedTask ? parseInt(selectedTask) : undefined,
+      toAgentId: selectedAgent && selectedAgent !== "0" ? parseInt(selectedAgent) : undefined,
+      taskId: selectedTask && selectedTask !== "0" ? parseInt(selectedTask) : undefined,
     };
 
     // Check if message is requesting project creation
@@ -238,7 +238,7 @@ export default function Chat() {
                     <SelectValue placeholder="Select agent" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All agents</SelectItem>
+                    <SelectItem value="0">All agents</SelectItem>
                     {agents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id.toString()}>
                         {agent.name} ({agent.type})
@@ -252,7 +252,7 @@ export default function Chat() {
                     <SelectValue placeholder="Select task" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No task</SelectItem>
+                    <SelectItem value="0">No task</SelectItem>
                     {tasks.map((task: any) => (
                       <SelectItem key={task.id} value={task.id.toString()}>
                         {task.title}
