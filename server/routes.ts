@@ -15,6 +15,10 @@ import { DiagramService } from './services/diagramService';
 import { FileSummarizerService } from './services/fileSummarizerService';
 import { MessageRoutingService } from './services/messageRoutingService';
 import { AgentAI } from './services/agentAI';
+import { AgentMemoryService } from './services/agentMemory';
+import { ArtifactEngine } from './services/artifactEngine';
+import { CollaborationEngine } from './services/collaborationEngine';
+import { ContinuousLearningEngine } from './services/continuousLearning';
 import { insertTaskSchema, insertCommunicationSchema, insertArtifactSchema } from '../shared/schema';
 
 // --- Utility: Autonomous goal generation for agents ---
@@ -73,6 +77,12 @@ export async function registerRoutes(
   const diagramService = new DiagramService(storage);
   const fileSummarizerService = new FileSummarizerService(storage);
   const messageRoutingService = new MessageRoutingService(storage);
+  
+  // Initialize advanced AI services (Phase 2-5)
+  const agentMemoryService = new AgentMemoryService(storage);
+  const artifactEngine = new ArtifactEngine(storage);
+  const collaborationEngine = new CollaborationEngine(storage);
+  const continuousLearningEngine = new ContinuousLearningEngine(storage, agentMemoryService);
 
   // Initialize agents on startup
   try {
@@ -121,35 +131,12 @@ export async function registerRoutes(
 
   // --- Utility: Agent learning from outcomes (learning/adaptation, with strategy update) ---
   async function agentLearnFromOutcome(agentId: number, taskId: number, outcome: string, details: any = {}) {
-    if (agentMemoryService && typeof agentMemoryService.logAgentMemory === 'function') {
-      await agentMemoryService.logAgentMemory(agentId, {
-        type: 'learning',
-        content: `Learned from task ${taskId}: ${outcome}`,
-        details,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    // --- Simple strategy update: store/update a 'strategy' in agent memory ---
-    if (agentMemoryService && typeof agentMemoryService.getAgentMemory === 'function') {
-      const mem = await agentMemoryService.getAgentMemory(agentId);
-      // Find last strategy
-      let lastStrategy = mem.slice().reverse().find((e: any) => e.type === 'strategy');
-      let newStrategy = { ...((lastStrategy && lastStrategy.details) || {}), lastOutcome: outcome };
-      // Example: if outcome is 'success', reinforce; if 'failure', try a new approach
-      if (outcome.toLowerCase().includes('fail')) {
-        newStrategy.riskTolerance = (newStrategy.riskTolerance || 0) - 1;
-      } else if (outcome.toLowerCase().includes('success')) {
-        newStrategy.riskTolerance = (newStrategy.riskTolerance || 0) + 1;
-      }
-      await agentMemoryService.logAgentMemory(agentId, {
-        type: 'strategy',
-        content: `Strategy updated after task ${taskId}: ${JSON.stringify(newStrategy)}`,
-        details: newStrategy,
-        timestamp: new Date().toISOString(),
-      });
+    if (agentMemoryService && typeof agentMemoryService.processTaskOutcome === 'function') {
+      await agentMemoryService.processTaskOutcome(agentId, taskId, outcome, details);
     }
     return true;
   }
+
 
   // --- Utility: Agent personality/specialization (dynamic, evolving) ---
   async function getAgentPersonality(agentId: number) {
@@ -1072,13 +1059,13 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
   setInterval(async () => {
     try {
       // Example: Each agent has a small chance to propose a new task
-      const agents = [samAgent, baileyAgent, dexAgent, tessAgent, ollieAgent, siennaAgent, ariaAgent, novaAgent, emiAgent];
+      const agents = await storage.getAgents();
       for (const agent of agents) {
         if (Math.random() < 0.05) { // 5% chance per interval
-          const personality = getAgentPersonality(agent.options.id);
-          const title = `Autonomous Task by ${agent.options.name}`;
-          const description = `A new task initiated by ${agent.options.name} (${personality.traits.join(", ")})`;
-          const tags = [agent.options.role, ...personality.expertise];
+          const personality = await getAgentPersonality(agent.id);
+          const title = `Autonomous Task by ${agent.name}`;
+          const description = `A new task initiated by ${agent.name} (${personality.traits.join(", ")})`;
+          const tags = [agent.type, ...personality.expertise];
           const priority = 'medium';
           // Propose the task
           const taskData = {
@@ -1086,7 +1073,7 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
             description,
             status: "pending",
             assignedToId: null,
-            createdById: String(agent.options.id),
+            createdById: String(agent.id),
             tags,
             priority,
             workflow: {
@@ -1096,9 +1083,9 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
             }
           };
           const newTask = await taskService.createTask(taskData);
-          await agentLearnFromOutcome(agent.options.id, newTask.id, "initiated autonomous task");
+          await agentLearnFromOutcome(agent.id, newTask.id, "initiated autonomous task");
           // Optionally, negotiate assignment among agents
-          const agentIds = agents.map(a => a.options.id);
+          const agentIds = agents.map(a => a.id);
           await negotiateTaskAssignment(agentIds, newTask.id);
           // Broadcast to WebSocket clients
           if (typeof wss !== 'undefined') {
@@ -1205,6 +1192,141 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
   app.get('/api/admin/settings', (req: any, res: any) => {
     // TODO: Add admin authentication/authorization
     res.json(adminSettings);
+  });
+
+  // Advanced AI Services API Endpoints (Phase 2-5)
+  
+  // Agent Memory Service endpoints
+  app.get('/api/agents/:id/memory', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const memory = await agentMemoryService.getAgentMemory(agentId);
+      res.json(memory);
+    } catch (error) {
+      console.error('Error fetching agent memory:', error);
+      res.status(500).json({ message: 'Failed to fetch agent memory' });
+    }
+  });
+
+  app.get('/api/agents/:id/insights', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const insights = await agentMemoryService.getAgentInsights(agentId);
+      res.json(insights);
+    } catch (error) {
+      console.error('Error fetching agent insights:', error);
+      res.status(500).json({ message: 'Failed to fetch agent insights' });
+    }
+  });
+
+  app.post('/api/agents/:id/reflect', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const reflection = await agentMemoryService.reflectOnPerformance(agentId);
+      res.json(reflection);
+    } catch (error) {
+      console.error('Error reflecting on performance:', error);
+      res.status(500).json({ message: 'Failed to reflect on performance' });
+    }
+  });
+
+  // Artifact Engine endpoints
+  app.post('/api/artifacts/generate', async (req, res) => {
+    try {
+      const { taskId, agentId, artifactType, context } = req.body;
+      const artifact = await artifactEngine.generateArtifact(taskId, agentId, artifactType, context);
+      res.json({ content: artifact });
+    } catch (error) {
+      console.error('Error generating artifact:', error);
+      res.status(500).json({ message: 'Failed to generate artifact' });
+    }
+  });
+
+  app.post('/api/artifacts/:id/refine', async (req, res) => {
+    try {
+      const artifactId = parseInt(req.params.id);
+      const { feedback, agentId } = req.body;
+      const refinedArtifact = await artifactEngine.refineArtifact(artifactId, feedback, agentId);
+      res.json({ content: refinedArtifact });
+    } catch (error) {
+      console.error('Error refining artifact:', error);
+      res.status(500).json({ message: 'Failed to refine artifact' });
+    }
+  });
+
+  app.get('/api/artifacts/templates', async (req, res) => {
+    try {
+      const templates = artifactEngine.getAvailableTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching artifact templates:', error);
+      res.status(500).json({ message: 'Failed to fetch artifact templates' });
+    }
+  });
+
+  // Collaboration Engine endpoints
+  app.post('/api/collaborate/initiate', async (req, res) => {
+    try {
+      const { taskId, initiatorId, collaborationType, context } = req.body;
+      const collaborationId = await collaborationEngine.initiateCollaboration(taskId, initiatorId, collaborationType, context);
+      res.json({ collaborationId });
+    } catch (error) {
+      console.error('Error initiating collaboration:', error);
+      res.status(500).json({ message: 'Failed to initiate collaboration' });
+    }
+  });
+
+  app.post('/api/collaborate/:id/respond', async (req, res) => {
+    try {
+      const collaborationId = req.params.id;
+      const { agentId, response, details } = req.body;
+      await collaborationEngine.handleCollaborationResponse(collaborationId, agentId, response, details);
+      res.json({ message: 'Collaboration response processed' });
+    } catch (error) {
+      console.error('Error handling collaboration response:', error);
+      res.status(500).json({ message: 'Failed to process collaboration response' });
+    }
+  });
+
+  app.get('/api/collaborate/active', async (req, res) => {
+    try {
+      const activeCollaborations = Array.from(collaborationEngine.getActiveCollaborations().entries());
+      res.json(activeCollaborations);
+    } catch (error) {
+      console.error('Error fetching active collaborations:', error);
+      res.status(500).json({ message: 'Failed to fetch active collaborations' });
+    }
+  });
+
+  // Continuous Learning Engine endpoints
+  app.get('/api/learning/patterns', async (req, res) => {
+    try {
+      const patterns = continuousLearningEngine.getLearningPatterns();
+      res.json(patterns);
+    } catch (error) {
+      console.error('Error fetching learning patterns:', error);
+      res.status(500).json({ message: 'Failed to fetch learning patterns' });
+    }
+  });
+
+  app.get('/api/learning/adaptations', async (req, res) => {
+    try {
+      const adaptations = Array.from(continuousLearningEngine.getAdaptationStrategies().entries());
+      res.json(adaptations);
+    } catch (error) {
+      console.error('Error fetching adaptation strategies:', error);
+      res.status(500).json({ message: 'Failed to fetch adaptation strategies' });
+    }
+  });
+
+  app.get('/api/learning/insights', async (req, res) => {
+    try {
+      const insights = await continuousLearningEngine.generateSystemInsights();
+      res.json(insights);
+    } catch (error) {
+      console.error('Error generating system insights:', error);
+      res.status(500).json({ message: 'Failed to generate system insights' });
+    }
   });
 
   // POST admin settings (admin-only; add auth later)
