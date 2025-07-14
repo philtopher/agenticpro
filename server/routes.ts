@@ -1,7 +1,7 @@
 import { Express } from 'express';
 import { Server, createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import * as storage from './storage';
+import { storage } from './storage';
 import { AgentService } from './services/agentService';
 import { TaskService } from './services/taskService';
 import { CommunicationService } from './services/communicationService';
