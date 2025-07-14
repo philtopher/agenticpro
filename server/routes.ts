@@ -1055,55 +1055,10 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
   // All agent decision-making now powered by OpenAI GPT-4o cognitive system
   console.log("✨ AI-powered cognitive agents active - Phase 1 complete!");
 
-  // --- Autonomous Task Initiation: Agents propose/initiate/assign tasks without user input ---
-  setInterval(async () => {
-    try {
-      // Example: Each agent has a small chance to propose a new task
-      const agents = await storage.getAgents();
-      for (const agent of agents) {
-        if (Math.random() < 0.05) { // 5% chance per interval
-          const personality = await getAgentPersonality(agent.id);
-          const title = `Autonomous Task by ${agent.name}`;
-          const description = `A new task initiated by ${agent.name} (${personality.traits.join(", ")})`;
-          const tags = [agent.type, ...personality.expertise];
-          const priority = 'medium';
-          // Propose the task
-          const taskData = {
-            title,
-            description,
-            status: "pending",
-            assignedToId: null,
-            createdById: null, // Set to null since agents aren't users
-            tags,
-            priority,
-            workflow: {
-              stage: "requirements",
-              history: [],
-              nextAgent: "product_manager"
-            }
-          };
-          const newTask = await taskService.createTask(taskData);
-          await agentLearnFromOutcome(agent.id, newTask.id, "initiated autonomous task");
-          // Optionally, negotiate assignment among agents
-          const agentIds = agents.map(a => a.id);
-          await negotiateTaskAssignment(agentIds, newTask.id);
-          // Broadcast to WebSocket clients
-          if (typeof wss !== 'undefined') {
-            wss.clients.forEach((client) => {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({
-                  type: 'task_created',
-                  data: newTask
-                }));
-              }
-            });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Autonomous agent task initiation error:", err);
-    }
-  }, 30000); // Every 30s
+  // --- Autonomous Task Initiation: DISABLED ---
+  // Autonomous task creation disabled due to foreign key constraints
+  // Agents cannot create tasks without valid user authentication
+  console.log("Autonomous task creation disabled - requires user authentication");
 
   // ---
   // NOTE: Each agent daemon supports both default and document-driven workflow handoff.

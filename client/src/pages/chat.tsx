@@ -135,6 +135,9 @@ export default function Chat() {
     } else {
       sendMessageMutation.mutate(messageData);
     }
+    
+    // Clear the message input after submission
+    setMessage('');
   };
 
   const formatTime = (timestamp: string) => {
