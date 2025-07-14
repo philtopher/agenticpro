@@ -1073,7 +1073,7 @@ if (typeof (governorService as any).handleStuckTask !== 'function') {
             description,
             status: "pending",
             assignedToId: null,
-            createdById: String(agent.id),
+            createdById: null, // Set to null since agents aren't users
             tags,
             priority,
             workflow: {
