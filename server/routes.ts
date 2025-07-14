@@ -511,6 +511,17 @@ export async function registerRoutes(
     try {
       const communicationData = insertCommunicationSchema.parse(req.body);
       const communication = await communicationService.createCommunication(communicationData);
+      
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'communication_created',
+            data: communication
+          }));
+        }
+      });
+      
       res.status(201).json(communication);
     } catch (error) {
       console.error("Error creating communication:", error);

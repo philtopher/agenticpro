@@ -66,7 +66,6 @@ export default function Chat() {
       });
     },
     onSuccess: () => {
-      setMessage('');
       queryClient.invalidateQueries({ queryKey: ['/api/communications'] });
     },
   });
